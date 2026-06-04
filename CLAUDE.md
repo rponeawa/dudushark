@@ -44,6 +44,7 @@ NapCatQQ (QQ客户端)
                  ├─ bot/onebot_handler.py      (OneBot 协议解析，create_task 异步分发)
                  ├─ bot/message_handler.py     (消息合并缓冲 → LLM 调用 → 回复拆分)
                  ├─ bot/persona.py             (System prompt 人设定义)
+                 ├─ bot/mood.py                 (全局心情/睡眠：影响所有回复+主动发言)
                  ├─ memory/manager.py          (按 user_id 分目录的 MD 记忆 CRUD)
                  ├─ memory/vector_store.py     (ChromaDB + SiliconFlow embedding)
                  ├─ memory/context.py          (128K token 上下文压缩，摘要合并)
@@ -79,12 +80,17 @@ NapCatQQ (QQ客户端)
 - 多次压缩的摘要自动合并（`_coalesce_summaries`），确保始终 ≤1 条摘要消息
 - 摘要本身计入 token 预算，会为摘要腾出空间
 
+**全局心情系统：**
+- `mood.py` 中的 `DuduMood` 是每个 QQ 实例的单例，被 proactive scheduler 和 message handler 共享
+- 小时心情曲线作为**基线**，Dudu 可以随机偏离 ±0.15，每 2-6 小时重新决定
+- 特殊状态：`night_owl`（深夜抗拒睡意 25% 概率）、`daydream`（白天莫名犯困 12% 概率）
+- `system_mood_context()` 生成心情描述注入系统 prompt，让 LLM 知晓当前状态
+- `llm_temperature()` / `llm_max_tokens()` 根据睡眠状态调整参数（困时温度 0.75、刚醒 0.90）
+- 前端状态面板实时显示睡眠状态 + 精力条
+
 **主动消息：**
-- `proactive.py` 中的 `ProactiveScheduler` 在 OneBot 连接后启动，断开后停止
-- 仅在她曾有回复的对话中主动发言，频率由四层随机决定：唤醒间隔(90-240s) × 小时心情曲线 × 睡眠状态机(awake/sleepy/just_woke) × 好奇心冲动
-- 私聊与群聊概率等同（均默认 0.30），近期活跃对话加权
-- LLM 有最终决定权——可输出 `[SKIP]` 不说话
-- 全局冷却 10 分钟，单对话冷却 45 分钟
+- `proactive.py` 中的 `ProactiveScheduler` 读取全局 `DuduMood`，不再拥有独立的心情/睡眠状态
+- 仅在她曾有回复的对话中主动发言，频率由全局心情 + 好奇心阈值决定
 
 **NapCatQQ 安装 (start.sh)：**
 - 自动下载 NapCatQQ v4.x Framework + Shell，解压到 `~/NapCatQQ/`
