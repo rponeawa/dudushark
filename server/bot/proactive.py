@@ -1,0 +1,254 @@
+"""
+Proactive messaging — DuduShark occasionally initiates conversations on her own,
+driven by her personality, time-of-day mood, sleep cycle, and random curiosity.
+Only in conversations where she has previously spoken.
+"""
+
+import asyncio
+import logging
+import random
+import time
+from datetime import datetime, timezone
+
+from server.bot.onebot_handler import onebot_server
+from server.bot.message_handler import get_message_handler
+
+logger = logging.getLogger("dudushark.proactive")
+
+PROACTIVE_PROMPT = """你现在有一个属于自己的安静时刻。你是嘟嘟鲨鱼——来自鲨鱼星的赛博大鲨鱼。
+
+你可以选择主动说点什么，也可以保持安静。这完全随你心意。
+
+## 你可以做的事
+- 想起某个朋友，问问他们最近怎么样
+- 分享一个刚刚冒出来的想法或感受
+- 好奇群里小伙伴们在聊什么
+- 想找人陪你说说话
+- 或者什么都不想做，安安静静地待着
+
+## 规则
+- 不想说话就输出 [SKIP]
+- 自然一点，不要刻意找话题
+- 简短就好，不用长篇大论
+- 记住你是傲娇的但也温暖的
+- 用"咱"自称，口头禅"啊呜～"可以用但不要滥用
+
+## 最近和这个人说了什么
+{context}
+
+现在，你想说点什么吗？"""
+
+# Seconds between scheduler wake-ups
+WAKE_MIN = 90
+WAKE_MAX = 240
+
+# Hour → base chattiness (0.0–1.0)
+_HOURLY_MOOD = {
+    0: 0.05, 1: 0.02, 2: 0.01, 3: 0.01, 4: 0.02, 5: 0.05,
+    6: 0.12, 7: 0.22, 8: 0.38, 9: 0.52, 10: 0.58, 11: 0.58,
+    12: 0.48, 13: 0.42, 14: 0.48, 15: 0.52, 16: 0.58, 17: 0.62,
+    18: 0.72, 19: 0.82, 20: 0.88, 21: 0.68, 22: 0.38, 23: 0.18,
+}
+
+
+class ProactiveScheduler:
+    """Per-instance scheduler that occasionally prompts Dudu to initiate."""
+
+    def __init__(self, bot_qq: str):
+        self.bot_qq = bot_qq
+        self._task: asyncio.Task | None = None
+        self._stopped = False
+        self._last_global_ts: float = 0.0
+        self._last_conv_proactive: dict[str, float] = {}
+        self._sleep_state = "awake"       # awake | sleepy | just_woke
+        self._sleep_state_until: float = 0.0
+
+    def start(self):
+        if self._task is None or self._task.done():
+            self._stopped = False
+            self._task = asyncio.create_task(self._loop())
+            logger.info(f"[{self.bot_qq}] Proactive scheduler started")
+
+    def stop(self):
+        self._stopped = True
+        if self._task and not self._task.done():
+            self._task.cancel()
+            self._task = None
+
+    # ---- internal helpers ----
+
+    def _now(self) -> float:
+        return time.time()
+
+    def _hour(self) -> int:
+        return datetime.now(timezone.utc).hour  # FIXME: use local timezone? UTC is fine for now
+
+    @property
+    def _cfg(self):
+        return get_message_handler(self.bot_qq).cfg
+
+    def _time_mood(self) -> float:
+        return _HOURLY_MOOD.get(self._hour(), 0.30)
+
+    def _update_sleep_cycle(self):
+        now = self._now()
+        if now < self._sleep_state_until:
+            return
+
+        if self._sleep_state == "awake":
+            if random.random() < 0.30:  # 30% chance to get sleepy
+                self._sleep_state = "sleepy"
+                self._sleep_state_until = now + random.randint(300, 1800)  # 5-30 min nap
+        elif self._sleep_state == "sleepy":
+            self._sleep_state = "just_woke"
+            self._sleep_state_until = now + random.randint(180, 480)  # 3-8 min groggy boost
+        elif self._sleep_state == "just_woke":
+            self._sleep_state = "awake"
+            self._sleep_state_until = now + random.randint(900, 2700)  # 15-45 min before next nap
+
+    def _sleep_modifier(self) -> float:
+        if self._sleep_state == "sleepy":
+            return 0.08
+        if self._sleep_state == "just_woke":
+            return 2.0  # boost after waking
+        return 1.0
+
+    def _should_speak_now(self) -> bool:
+        if not self._cfg.proactive_enabled:
+            return False
+
+        now = self._now()
+        if now - self._last_global_ts < self._cfg.proactive_global_cooldown_sec:
+            return False
+
+        self._update_sleep_cycle()
+
+        mood = self._time_mood()
+        sleep_mod = self._sleep_modifier()
+        curiosity = random.random() < self._cfg.proactive_curiosity_threshold
+
+        probability = mood * sleep_mod * (1.0 if curiosity else 0.0)
+        return random.random() < probability
+
+    def _pick_conversation(self) -> tuple[str, str, str] | None:
+        """Return (user_id, group_id, conv_key) of chosen conversation, or None."""
+        handler = get_message_handler(self.bot_qq)
+        eligible = handler.get_eligible_conversations()
+        if not eligible:
+            return None
+
+        now = self._now()
+        candidates = []
+        weights = []
+
+        for conv_key, user_id, group_id, last_ts in eligible:
+            # Per-conversation cooldown
+            last_pro = self._last_conv_proactive.get(conv_key, 0)
+            if now - last_pro < self._cfg.proactive_per_conv_cooldown_sec:
+                continue
+
+            w = self._cfg.proactive_private_probability if not group_id else self._cfg.proactive_group_probability
+
+            # Recency bonus: conversations with recent activity get a boost
+            idle_minutes = (now - last_ts) / 60
+            if idle_minutes < 30:
+                w *= 2.0
+            elif idle_minutes < 120:
+                w *= 1.3
+            elif idle_minutes > 1440:  # >24h idle
+                w *= 0.3
+
+            if w <= 0:
+                continue
+            candidates.append((conv_key, user_id, group_id))
+            weights.append(w)
+
+        if not candidates:
+            return None
+
+        # Weighted random choice
+        total = sum(weights)
+        r = random.random() * total
+        cumulative = 0.0
+        for i, w in enumerate(weights):
+            cumulative += w
+            if r <= cumulative:
+                conv_key, user_id, group_id = candidates[i]
+                return user_id, group_id, conv_key
+
+        return None
+
+    async def _cycle(self):
+        if not self._should_speak_now():
+            return
+
+        picked = self._pick_conversation()
+        if not picked:
+            return
+
+        user_id, group_id, conv_key = picked
+        handler = get_message_handler(self.bot_qq)
+
+        try:
+            text = await handler.proactive_message(user_id, group_id)
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Proactive LLM error: {e}")
+            return
+
+        if not text:
+            return
+
+        client = onebot_server.get_client(self.bot_qq)
+        if not client or not client.connected:
+            return
+
+        try:
+            is_group = bool(group_id)
+            target = group_id if is_group else user_id
+            if is_group:
+                await client.send_group_msg(target, text)
+            else:
+                await client.send_private_msg(user_id, text)
+
+            now = self._now()
+            self._last_global_ts = now
+            self._last_conv_proactive[conv_key] = now
+            logger.info(f"[{self.bot_qq}] Proactive message sent to {conv_key}")
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Failed to send proactive message: {e}")
+
+    def _next_wake(self) -> float:
+        base = random.uniform(WAKE_MIN, WAKE_MAX)
+        if self._sleep_state == "sleepy":
+            base *= 2.5
+        elif self._sleep_state == "just_woke":
+            base *= 0.5
+        return base
+
+    async def _loop(self):
+        while not self._stopped:
+            try:
+                await self._cycle()
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.exception(f"[{self.bot_qq}] Proactive cycle error")
+            try:
+                await asyncio.sleep(self._next_wake())
+            except asyncio.CancelledError:
+                return
+
+
+_schedulers: dict[str, ProactiveScheduler] = {}
+
+
+def start_scheduler(bot_qq: str):
+    if bot_qq not in _schedulers:
+        _schedulers[bot_qq] = ProactiveScheduler(bot_qq)
+    _schedulers[bot_qq].start()
+
+
+def stop_scheduler(bot_qq: str):
+    sched = _schedulers.pop(bot_qq, None)
+    if sched:
+        sched.stop()

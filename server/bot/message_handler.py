@@ -54,11 +54,16 @@ class MessageHandler:
         key = self._conv_key(user_id, group_id)
         return self._conversations.get(key, [])[-max_len:]
 
-    def _append_history(self, user_id: str, role: str, content: str, group_id: str = ""):
+    def _append_history(self, user_id: str, role: str, content: str, group_id: str = "", proactive: bool = False):
         key = self._conv_key(user_id, group_id)
         if key not in self._conversations:
             self._conversations[key] = []
-        self._conversations[key].append({"role": role, "content": content})
+        self._conversations[key].append({
+            "role": role,
+            "content": content,
+            "ts": time.time(),
+            "proactive": proactive,
+        })
         if len(self._conversations[key]) > 200:
             self._conversations[key] = self._conversations[key][-100:]
 
@@ -250,6 +255,89 @@ class MessageHandler:
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())
+
+    def has_bot_spoken(self, user_id: str, group_id: str = "") -> bool:
+        """Check if Dudu has ever replied in this conversation."""
+        key = self._conv_key(user_id, group_id)
+        return any(m.get("role") == "assistant" for m in self._conversations.get(key, []))
+
+    def get_eligible_conversations(self) -> list[tuple[str, str, str, float]]:
+        """Return (conv_key, user_id, group_id, last_ts) for convos where Dudu has spoken."""
+        results = []
+        for key, msgs in self._conversations.items():
+            if not any(m.get("role") == "assistant" for m in msgs):
+                continue
+            last_ts = max((m.get("ts", 0) for m in msgs), default=0)
+            parts = key.split(":")
+            user_id = parts[0]
+            group_id = parts[1] if len(parts) > 1 else ""
+            results.append((key, user_id, group_id, last_ts))
+        return results
+
+    async def proactive_message(self, user_id: str, group_id: str = "") -> str | None:
+        """Generate a proactive message. Returns text or None if SKIP/error."""
+        from server.bot.persona import PERSONA_SYSTEM_PROMPT
+        from server.bot.proactive import PROACTIVE_PROMPT
+
+        history = self._get_history(user_id, group_id, max_len=20)
+        is_group = bool(group_id)
+
+        context_lines = []
+        for m in history:
+            role_label = "对方" if m.get("role") == "user" else "咱"
+            context_lines.append(f"{role_label}: {m.get('content', '')[:200]}")
+        context = "\n".join(context_lines) if context_lines else "（这是第一次和这个人说话）"
+
+        memories = self.memory.recall_by_vector(user_id, "最近过得怎么样 聊天", n=5)
+        memories_text = ""
+        if memories:
+            lines = []
+            for m in memories:
+                lines.append(f"- [{m.get('meta', {}).get('date', '?')}] {m['text'][:200]}")
+            memories_text = "\n".join(lines)
+
+        prompt_text = PROACTIVE_PROMPT.format(context=context)
+        system_content = PERSONA_SYSTEM_PROMPT
+        if memories_text:
+            system_content += f"\n\n## 关于这个人的记忆\n{memories_text}"
+
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": prompt_text},
+        ]
+
+        llm = self.cfg.llm
+        headers = {"Authorization": f"Bearer {llm.api_key}", "Content-Type": "application/json"}
+        payload = {"model": llm.model, "messages": messages, "temperature": 0.9, "max_tokens": 512}
+
+        try:
+            async with httpx.AsyncClient(timeout=45) as client:
+                resp = await client.post(llm.base_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text = data["choices"][0]["message"]["content"].strip()
+                else:
+                    logger.warning(f"Proactive LLM error {resp.status_code}: {resp.text[:200]}")
+                    return None
+        except Exception as e:
+            logger.error(f"Proactive LLM call failed: {e}")
+            return None
+
+        if not text or text.strip() == "[SKIP]":
+            return None
+
+        async with self._lock:
+            key = self._conv_key(user_id, group_id)
+            if key not in self._conversations:
+                self._conversations[key] = []
+            self._conversations[key].append({
+                "role": "assistant",
+                "content": text,
+                "ts": time.time(),
+                "proactive": True,
+            })
+
+        return text
 
 
 _message_handlers: dict[str, MessageHandler] = {}

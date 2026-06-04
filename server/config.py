@@ -31,6 +31,13 @@ class BotConfig(BaseModel):
     group_merge_delay: float = 3.0
     napcat_webui_port: int = 6099
     onebot_ws_port: int = 8080
+    # Proactive messaging
+    proactive_enabled: bool = True
+    proactive_global_cooldown_sec: int = 600
+    proactive_per_conv_cooldown_sec: int = 2700
+    proactive_group_probability: float = 0.12
+    proactive_private_probability: float = 0.50
+    proactive_curiosity_threshold: float = 0.35
 
 
 def load_global_config() -> dict:

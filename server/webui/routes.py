@@ -228,6 +228,12 @@ class ConfigUpdate(BaseModel):
     group_merge_delay: float | None = None
     onebot_ws_port: int | None = None
     napcat_webui_port: int | None = None
+    proactive_enabled: bool | None = None
+    proactive_global_cooldown_sec: int | None = None
+    proactive_per_conv_cooldown_sec: int | None = None
+    proactive_group_probability: float | None = None
+    proactive_private_probability: float | None = None
+    proactive_curiosity_threshold: float | None = None
 
 
 @router.put("/instances/{qq}/config")
@@ -255,6 +261,18 @@ async def update_config(qq: str, body: ConfigUpdate):
         cfg.onebot_ws_port = body.onebot_ws_port
     if body.napcat_webui_port is not None:
         cfg.napcat_webui_port = body.napcat_webui_port
+    if body.proactive_enabled is not None:
+        cfg.proactive_enabled = body.proactive_enabled
+    if body.proactive_global_cooldown_sec is not None:
+        cfg.proactive_global_cooldown_sec = body.proactive_global_cooldown_sec
+    if body.proactive_per_conv_cooldown_sec is not None:
+        cfg.proactive_per_conv_cooldown_sec = body.proactive_per_conv_cooldown_sec
+    if body.proactive_group_probability is not None:
+        cfg.proactive_group_probability = body.proactive_group_probability
+    if body.proactive_private_probability is not None:
+        cfg.proactive_private_probability = body.proactive_private_probability
+    if body.proactive_curiosity_threshold is not None:
+        cfg.proactive_curiosity_threshold = body.proactive_curiosity_threshold
     save_instance_config(cfg)
     handler = get_message_handler(qq)
     handler.reload_config()
