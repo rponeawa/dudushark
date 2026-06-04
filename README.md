@@ -15,8 +15,10 @@
 - **长回复拆分** — 按句末标点自然断句，分段发送
 - **网络搜索** — Bing/DDG HTML 解析，不依赖搜索 API
 - **群聊安静** — 自由判断是否参与话题，不过度发言
+- **主动消息** — 按时间心情、睡眠节律、好奇心自主发消息，仅限她曾聊过的人/群
 - **Web 管理面板** — 深海主题 UI，实例管理、记忆浏览、对话查看、配置修改
 - **QR 码登录** — 通过 WebUI 扫码登录 QQ
+- **一键安装** — `start.sh` 自动下载安装 NapCatQQ、签名原生模块、桥接 macOS QQ 路径
 
 ## 前置条件
 
@@ -85,7 +87,8 @@ NapCatQQ (QQ客户端)
                  ├─ memory/vector_store.py     (ChromaDB + embedding)
                  ├─ memory/context.py          (128K 上下文压缩)
                  ├─ search/bing.py             (Bing/DDG HTML 搜索)
-                 ├─ napcat/manager.py          (NapCatQQ 进程管理)
+                 ├─ bot/proactive.py           (主动消息调度)
+                 ├─ napcat/manager.py          (NapCatQQ v4.x 进程管理)
                  └─ webui/routes.py            (REST API + WS 事件推送)
 ```
 
@@ -97,6 +100,15 @@ NapCatQQ (QQ客户端)
 4. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
 5. 回复 `>>` 前缀表示引用回复，转为 OneBot reply segment
 6. 长回复按 `。！？\n` 自然断句拆分发送
+
+### 主动消息
+
+嘟嘟会在曾被动回复过的私聊或群聊中偶尔主动开口。频率不固定，由四层随机决定：
+- **唤醒间隔**：90–240 秒随机醒来检查
+- **心情曲线**：凌晨几乎不说话，晚上最活跃
+- **睡眠节律**：awake → sleepy → just_woke 三态随机切换，刚醒时 2 倍兴奋
+- **好奇心冲动**：随机 roll vs 可配置阈值
+- 私聊权重 4 倍于群聊，LLM 可用 `[SKIP]` 决定不说话
 
 ### 记忆系统
 
@@ -126,7 +138,8 @@ dudushark/
 │   ├── bot/                # 机器人核心
 │   │   ├── onebot_handler.py
 │   │   ├── message_handler.py
-│   │   └── persona.py      # 角色人设
+│   │   ├── persona.py      # 角色人设
+│   │   └── proactive.py    # 主动消息调度
 │   ├── memory/             # 记忆系统
 │   │   ├── manager.py
 │   │   ├── vector_store.py # ChromaDB
