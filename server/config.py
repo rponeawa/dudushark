@@ -35,8 +35,8 @@ class BotConfig(BaseModel):
     proactive_enabled: bool = True
     proactive_global_cooldown_sec: int = 600
     proactive_per_conv_cooldown_sec: int = 2700
-    proactive_group_probability: float = 0.12
-    proactive_private_probability: float = 0.50
+    proactive_group_probability: float = 0.30
+    proactive_private_probability: float = 0.30
     proactive_curiosity_threshold: float = 0.35
 
 
