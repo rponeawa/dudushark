@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -37,11 +38,12 @@ class NapCatInstance:
         for maybe in [
             "/opt/NapCatQQ/napcat.sh",
             os.path.expanduser("~/NapCatQQ/napcat.sh"),
-            "napcat",
-            "napcat.sh",
         ]:
-            if os.path.exists(maybe) or maybe in ("napcat", "napcat.sh"):
+            if os.path.exists(maybe):
                 return maybe
+        for cmd in ["napcat", "napcat.sh"]:
+            if shutil.which(cmd):
+                return cmd
         return None
 
     def ensure_config(self) -> bool:
