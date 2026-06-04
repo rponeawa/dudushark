@@ -1,0 +1,26 @@
+# Python virtual environment
+.venv/
+
+# Runtime data (configs, databases, memories, logs)
+data/
+
+# Frontend
+web/node_modules/
+server/webui/static/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# TypeScript build artifacts
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# Environment variables (contains secrets)
+.env
+.env.*
+!.env.example
