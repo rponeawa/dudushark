@@ -90,7 +90,17 @@ NapCatQQ (QQ客户端)
 
 **主动消息：**
 - `proactive.py` 中的 `ProactiveScheduler` 读取全局 `DuduMood`，不再拥有独立的心情/睡眠状态
-- 仅在她曾有回复的对话中主动发言，频率由全局心情 + 好奇心阈值决定
+- 仅在她曾有回复的对话中主动发言
+- **动态唤醒间隔**：根据嘟嘟是否在活跃聊天自动调整
+  - 最近有回复（engaged）：3–8 分钟
+  - 有人说话但她没参与（idle）：15–45 分钟
+  - 完全安静（quiet）：30–60 分钟
+- 睡眠状态再叠加系数（困时 ×2.5，刚醒/夜猫子 ×0.5）
+
+**Prompt 缓存优化：**
+- LLM 消息构建为独立 system 消息：[0]=固定人设(始终命中缓存) [1]=心情 [2]=记忆 [3+]=历史
+- `msg[0]` 永远不变 → prefix cache 命中率 100%
+- 记忆日期格式化为易读的 `MM-DD HH:MM` 而非 ISO 8601
 
 **NapCatQQ 安装 (start.sh)：**
 - 自动下载 NapCatQQ v4.x Framework + Shell，解压到 `~/NapCatQQ/`
