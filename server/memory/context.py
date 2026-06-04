@@ -28,11 +28,12 @@ class ContextManager:
         return sum(self.count_tokens(m.get("content", "")) + 4 for m in messages) + 2
 
     def fit_messages(
-        self, system_prompt: str, messages: list[dict], memories_text: str = ""
+        self, system_prompt: str, messages: list[dict]
     ) -> list[dict]:
         """
         返回压缩后的消息列表，保证不超过 token 限制。
-        包含 system prompt + 记忆 + 旧摘要 + 最近消息。
+        包含 system prompt + 旧摘要 + 最近消息。
+        记忆和 mood 由调用者作为独立 system 消息添加（提高缓存命中率）。
         """
         budget = self.max_tokens - self.reserve - 20
 
@@ -48,10 +49,8 @@ class ContextManager:
 
         coalesced_summary = self._coalesce_summaries(old_summaries)
 
-        # ---- 构建 system 部分 ----
+        # ---- 构建 system 部分（仅 prompt + 摘要） ----
         system_parts = [system_prompt]
-        if memories_text:
-            system_parts.append(f"## 咱对这个人的记忆：\n{memories_text}")
         if coalesced_summary:
             system_parts.append(coalesced_summary)
         system_content = "\n\n".join(system_parts)
@@ -89,10 +88,7 @@ class ContextManager:
                 removed = result.pop(0)
                 remaining += self.count_tokens(removed.get("content", "")) + 4
             if summary_tokens <= remaining:
-                sys_content = system_prompt
-                if memories_text:
-                    sys_content += f"\n\n## 咱对这个人的记忆：\n{memories_text}"
-                sys_content += f"\n\n{new_summary_text}"
+                sys_content = system_prompt + f"\n\n{new_summary_text}"
                 # 重建 system message
                 result.insert(0, {"role": "system", "content": sys_content})
 

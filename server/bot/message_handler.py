@@ -168,19 +168,36 @@ class MessageHandler:
             lines = []
             for m in memories:
                 date = m.get("meta", {}).get("date", "未知")
+                # Format ISO date to human-readable: "2026-06-04T17:04:38Z" → "06-04 17:04"
+                try:
+                    if "T" in date:
+                        d, t = date.replace("Z", "").split("T", 1)
+                        parts = d.split("-")
+                        date = f"{parts[1]}-{parts[2]} {t.split(':')[0]}:{t.split(':')[1]}"
+                except Exception:
+                    pass
                 lines.append(f"- [{date}] {m['text'][:500]}")
             memories_text = "\n".join(lines)
 
-        # 构建消息
+        # 构建消息 — 独立 system 消息提高缓存命中率
+        # msg[0]=persona(不变→缓存命中), msg[1]=mood, msg[2]=memories, msg[3+]=history
         mood = get_mood(self.bot_qq)
         mood.update()
         mood_context = mood.system_mood_context()
-        system_prompt = PERSONA_SYSTEM_PROMPT
+
+        messages = [{"role": "system", "content": PERSONA_SYSTEM_PROMPT}]
+
         if mood_context:
-            system_prompt += "\n\n## 你现在的心情\n" + mood_context
+            messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
+
+        if memories_text:
+            messages.append({"role": "system", "content": "## 咱对这个人的记忆：\n" + memories_text})
 
         history = self._get_history(user_id, group_id)
-        messages = self.ctx.fit_messages(system_prompt, history, memories_text)
+        fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
+        # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
+        history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
+        messages.extend(history_msgs)
 
         prefix = "[群聊]" if is_group else ""
         user_msg = {"role": "user", "content": f"{prefix}{user_name} 说: {text}"}
