@@ -38,6 +38,8 @@ class BotConfig(BaseModel):
     proactive_group_probability: float = 0.30
     proactive_private_probability: float = 0.30
     proactive_curiosity_threshold: float = 0.35
+    # Mood system
+    mood_enabled: bool = True
 
 
 def load_global_config() -> dict:

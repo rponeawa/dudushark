@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.bot.onebot_handler import onebot_server
 from server.bot.message_handler import get_message_handler
+from server.bot.mood import remove_mood
 from server.bot.proactive import start_scheduler, stop_scheduler
 from server.config import DATA_DIR
 from server.webui.routes import router as webui_router, push_event
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     yield
     for qq in onebot_server.list_clients():
         stop_scheduler(qq)
+        remove_mood(qq)
     logger.info("嘟嘟鲨鱼 要睡觉了... 啊呜～晚安～")
 
 

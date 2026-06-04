@@ -24,6 +24,7 @@ from server.config import (
 )
 from server.bot.onebot_handler import onebot_server
 from server.bot.message_handler import get_message_handler
+from server.bot.mood import get_mood
 from server.memory.manager import get_memory_manager
 from server.napcat.manager import napcat_manager
 
@@ -152,6 +153,8 @@ async def instance_detail_status(qq: str):
     for uid in memory_users:
         mem_stats[uid] = len(mem_mgr.recall_all(uid))
 
+    mood = get_mood(qq)
+    mood.update()
     return {
         "qq": qq,
         "connected": client.connected if client else False,
@@ -162,6 +165,7 @@ async def instance_detail_status(qq: str):
         "memory_users": memory_users,
         "memory_stats": mem_stats,
         "total_memories": sum(mem_stats.values()),
+        "mood": mood.state_dict(),
     }
 
 
@@ -234,6 +238,7 @@ class ConfigUpdate(BaseModel):
     proactive_group_probability: float | None = None
     proactive_private_probability: float | None = None
     proactive_curiosity_threshold: float | None = None
+    mood_enabled: bool | None = None
 
 
 @router.put("/instances/{qq}/config")
@@ -273,6 +278,8 @@ async def update_config(qq: str, body: ConfigUpdate):
         cfg.proactive_private_probability = body.proactive_private_probability
     if body.proactive_curiosity_threshold is not None:
         cfg.proactive_curiosity_threshold = body.proactive_curiosity_threshold
+    if body.mood_enabled is not None:
+        cfg.mood_enabled = body.mood_enabled
     save_instance_config(cfg)
     handler = get_message_handler(qq)
     handler.reload_config()

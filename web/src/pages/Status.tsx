@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, SystemStatus, InstanceDetailStatus } from "../api";
+import { getSystemStatus, getInstanceStatus, SystemStatus, InstanceDetailStatus, MoodState } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -12,6 +12,69 @@ function fmtUptime(s: number): string {
 function fmtTime(ts: number): string {
   const d = new Date(ts * 1000);
   return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+const SLEEP_LABELS: Record<string, string> = {
+  awake: "清醒",
+  sleepy: "困了",
+  just_woke: "刚睡醒",
+  night_owl: "夜猫子",
+  daydream: "白日梦",
+};
+
+const SLEEP_EMOJI: Record<string, string> = {
+  awake: "",
+  sleepy: "🥱",
+  just_woke: "揉眼",
+  night_owl: "🦉",
+  daydream: "💤",
+};
+
+function MoodCard({ mood }: { mood: MoodState }) {
+  const energyPct = Math.round(mood.energy * 100);
+  let energyColor = "var(--green)";
+  if (mood.energy < 0.2) energyColor = "var(--text-dim)";
+  else if (mood.energy < 0.4) energyColor = "var(--yellow)";
+  else if (mood.energy > 0.7) energyColor = "var(--accent)";
+
+  return (
+    <div style={{
+      background: "var(--bg-card)",
+      border: "1px solid var(--border)",
+      borderRadius: "var(--radius)",
+      padding: "10px 14px",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+    }}>
+      <span style={{ fontSize: "1.4rem" }}>
+        {SLEEP_EMOJI[mood.sleep_state] || ""}
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 2 }}>
+          {SLEEP_LABELS[mood.sleep_state] || mood.sleep_state}
+          {energyPct > 75 ? " · 精力充沛" : energyPct < 20 ? " · 好困" : ""}
+        </div>
+        <div style={{
+          height: 6,
+          background: "var(--bg-hover)",
+          borderRadius: 3,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%",
+            width: `${energyPct}%`,
+            background: energyColor,
+            borderRadius: 3,
+            transition: "width 0.5s",
+          }} />
+        </div>
+      </div>
+      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+        精力 {energyPct}%
+      </span>
+    </div>
+  );
 }
 
 export default function Status() {
@@ -133,6 +196,12 @@ export default function Status() {
               <span className="text-mono">http://127.0.0.1:{detail.napcat_webui_port}/webui/</span>
             </div>
           </div>
+          {detail.mood && (
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label>心情状态</label>
+              <MoodCard mood={detail.mood} />
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label>活跃对话数</label>

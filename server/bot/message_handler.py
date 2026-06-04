@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from server.bot.mood import get_mood
 from server.bot.persona import PERSONA_SYSTEM_PROMPT, FALLBACK_RESPONSES
 from server.config import get_instance_config
 from server.memory.manager import get_memory_manager
@@ -171,8 +172,15 @@ class MessageHandler:
             memories_text = "\n".join(lines)
 
         # 构建消息
+        mood = get_mood(self.bot_qq)
+        mood.update()
+        mood_context = mood.system_mood_context()
+        system_prompt = PERSONA_SYSTEM_PROMPT
+        if mood_context:
+            system_prompt += "\n\n## 你现在的心情\n" + mood_context
+
         history = self._get_history(user_id, group_id)
-        messages = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history, memories_text)
+        messages = self.ctx.fit_messages(system_prompt, history, memories_text)
 
         prefix = "[群聊]" if is_group else ""
         user_msg = {"role": "user", "content": f"{prefix}{user_name} 说: {text}"}
@@ -201,8 +209,8 @@ class MessageHandler:
         payload = {
             "model": llm.model,
             "messages": messages,
-            "temperature": 0.85,
-            "max_tokens": 1024,
+            "temperature": mood.llm_temperature(0.85),
+            "max_tokens": mood.llm_max_tokens(1024),
         }
 
         try:
@@ -297,7 +305,13 @@ class MessageHandler:
             memories_text = "\n".join(lines)
 
         prompt_text = PROACTIVE_PROMPT.format(context=context)
+
+        mood = get_mood(self.bot_qq)
+        mood.update()
+        mood_context = mood.system_mood_context()
         system_content = PERSONA_SYSTEM_PROMPT
+        if mood_context:
+            system_content += "\n\n## 你现在的心情\n" + mood_context
         if memories_text:
             system_content += f"\n\n## 关于这个人的记忆\n{memories_text}"
 
@@ -308,7 +322,7 @@ class MessageHandler:
 
         llm = self.cfg.llm
         headers = {"Authorization": f"Bearer {llm.api_key}", "Content-Type": "application/json"}
-        payload = {"model": llm.model, "messages": messages, "temperature": 0.9, "max_tokens": 512}
+        payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(512)}
 
         try:
             async with httpx.AsyncClient(timeout=45) as client:

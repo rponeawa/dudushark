@@ -1,6 +1,6 @@
 """
 Proactive messaging — DuduShark occasionally initiates conversations on her own,
-driven by her personality, time-of-day mood, sleep cycle, and random curiosity.
+driven by her personality and the global mood/sleep system.
 Only in conversations where she has previously spoken.
 """
 
@@ -8,10 +8,10 @@ import asyncio
 import logging
 import random
 import time
-from datetime import datetime, timezone
 
 from server.bot.onebot_handler import onebot_server
 from server.bot.message_handler import get_message_handler
+from server.bot.mood import get_mood
 
 logger = logging.getLogger("dudushark.proactive")
 
@@ -38,17 +38,8 @@ PROACTIVE_PROMPT = """你现在有一个属于自己的安静时刻。你是嘟�
 
 现在，你想说点什么吗？"""
 
-# Seconds between scheduler wake-ups
 WAKE_MIN = 90
 WAKE_MAX = 240
-
-# Hour → base chattiness (0.0–1.0)
-_HOURLY_MOOD = {
-    0: 0.05, 1: 0.02, 2: 0.01, 3: 0.01, 4: 0.02, 5: 0.05,
-    6: 0.12, 7: 0.22, 8: 0.38, 9: 0.52, 10: 0.58, 11: 0.58,
-    12: 0.48, 13: 0.42, 14: 0.48, 15: 0.52, 16: 0.58, 17: 0.62,
-    18: 0.72, 19: 0.82, 20: 0.88, 21: 0.68, 22: 0.38, 23: 0.18,
-}
 
 
 class ProactiveScheduler:
@@ -60,8 +51,7 @@ class ProactiveScheduler:
         self._stopped = False
         self._last_global_ts: float = 0.0
         self._last_conv_proactive: dict[str, float] = {}
-        self._sleep_state = "awake"       # awake | sleepy | just_woke
-        self._sleep_state_until: float = 0.0
+        self.mood = get_mood(bot_qq)
 
     def start(self):
         if self._task is None or self._task.done():
@@ -80,38 +70,9 @@ class ProactiveScheduler:
     def _now(self) -> float:
         return time.time()
 
-    def _hour(self) -> int:
-        return datetime.now(timezone.utc).hour  # FIXME: use local timezone? UTC is fine for now
-
     @property
     def _cfg(self):
         return get_message_handler(self.bot_qq).cfg
-
-    def _time_mood(self) -> float:
-        return _HOURLY_MOOD.get(self._hour(), 0.30)
-
-    def _update_sleep_cycle(self):
-        now = self._now()
-        if now < self._sleep_state_until:
-            return
-
-        if self._sleep_state == "awake":
-            if random.random() < 0.30:  # 30% chance to get sleepy
-                self._sleep_state = "sleepy"
-                self._sleep_state_until = now + random.randint(300, 1800)  # 5-30 min nap
-        elif self._sleep_state == "sleepy":
-            self._sleep_state = "just_woke"
-            self._sleep_state_until = now + random.randint(180, 480)  # 3-8 min groggy boost
-        elif self._sleep_state == "just_woke":
-            self._sleep_state = "awake"
-            self._sleep_state_until = now + random.randint(900, 2700)  # 15-45 min before next nap
-
-    def _sleep_modifier(self) -> float:
-        if self._sleep_state == "sleepy":
-            return 0.08
-        if self._sleep_state == "just_woke":
-            return 2.0  # boost after waking
-        return 1.0
 
     def _should_speak_now(self) -> bool:
         if not self._cfg.proactive_enabled:
@@ -121,14 +82,12 @@ class ProactiveScheduler:
         if now - self._last_global_ts < self._cfg.proactive_global_cooldown_sec:
             return False
 
-        self._update_sleep_cycle()
+        self.mood.update()
 
-        mood = self._time_mood()
-        sleep_mod = self._sleep_modifier()
-        curiosity = random.random() < self._cfg.proactive_curiosity_threshold
+        if not (random.random() < self._cfg.proactive_curiosity_threshold):
+            return False
 
-        probability = mood * sleep_mod * (1.0 if curiosity else 0.0)
-        return random.random() < probability
+        return random.random() < self.mood.chattiness()
 
     def _pick_conversation(self) -> tuple[str, str, str] | None:
         """Return (user_id, group_id, conv_key) of chosen conversation, or None."""
@@ -219,9 +178,10 @@ class ProactiveScheduler:
 
     def _next_wake(self) -> float:
         base = random.uniform(WAKE_MIN, WAKE_MAX)
-        if self._sleep_state == "sleepy":
+        state = self.mood.sleep_state
+        if state == "sleepy":
             base *= 2.5
-        elif self._sleep_state == "just_woke":
+        elif state in ("just_woke", "night_owl"):
             base *= 0.5
         return base
 

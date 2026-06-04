@@ -73,6 +73,12 @@ export interface SystemStatus {
   total_memories: number;
   recent_events: Array<{ type: string; [key: string]: unknown; _ts: number }>;
 }
+export interface MoodState {
+  sleep_state: string;
+  hourly_mood: number;
+  energy: number;
+}
+
 export interface InstanceDetailStatus {
   qq: string;
   connected: boolean;
@@ -83,6 +89,7 @@ export interface InstanceDetailStatus {
   memory_users: string[];
   memory_stats: Record<string, number>;
   total_memories: number;
+  mood?: MoodState;
 }
 export const getSystemStatus = () => req<SystemStatus>("/status");
 export const getInstanceStatus = (qq: string) => req<InstanceDetailStatus>(`/instances/${qq}/status`);
