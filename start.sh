@@ -46,34 +46,57 @@ case "$ARCH" in
 esac
 
 install_napcat() {
-    if [ -f "$NAPCAT_DIR/napcat.sh" ]; then
-        info "NapCatQQ 已安装: $NAPCAT_DIR"
-        return 0
-    fi
-
-    info "正在安装 NapCatQQ 到 $NAPCAT_DIR ..."
-
-    local tmpdir
-    tmpdir=$(mktemp -d /tmp/napcat_install.XXXXXX)
-    trap "rm -rf $tmpdir" RETURN
-
-    # 下载 Framework + Shell
-    for pkg in Framework Shell; do
-        local url="${NAPCAT_GH}/NapCat.${pkg}.zip"
-        info "下载 NapCat.${pkg}.zip ..."
-        if ! curl -fsSL --connect-timeout 15 --retry 2 -o "$tmpdir/NapCat.${pkg}.zip" "$url"; then
-            err "下载失败: $url"
+    if [ ! -f "$NAPCAT_DIR/napcat.mjs" ] && [ ! -f "$NAPCAT_DIR/napcat.sh" ]; then
+        if ! command -v node &>/dev/null; then
+            err "NapCatQQ v4.x 需要 Node.js，请先安装 Node.js 18+"
             return 1
         fi
-    done
 
-    # 解压 Framework 再解压 Shell（Shell 覆盖 wrapper 脚本）
-    mkdir -p "$NAPCAT_DIR"
-    unzip -oq "$tmpdir/NapCat.Framework.zip" -d "$NAPCAT_DIR"
-    unzip -oq "$tmpdir/NapCat.Shell.zip" -d "$NAPCAT_DIR"
-    chmod +x "$NAPCAT_DIR/napcat.sh" 2>/dev/null || true
+        info "正在安装 NapCatQQ 到 $NAPCAT_DIR ..."
+        local tmpdir
+        tmpdir=$(mktemp -d /tmp/napcat_install.XXXXXX)
+        trap "rm -rf $tmpdir" RETURN
 
-    info "NapCatQQ 安装完成: $NAPCAT_DIR"
+        for pkg in Framework Shell; do
+            local url="${NAPCAT_GH}/NapCat.${pkg}.zip"
+            info "下载 NapCat.${pkg}.zip ..."
+            if ! curl -fsSL --connect-timeout 15 --retry 2 -o "$tmpdir/NapCat.${pkg}.zip" "$url"; then
+                err "下载失败: $url"
+                return 1
+            fi
+        done
+
+        mkdir -p "$NAPCAT_DIR"
+        unzip -oq "$tmpdir/NapCat.Framework.zip" -d "$NAPCAT_DIR"
+        unzip -oq "$tmpdir/NapCat.Shell.zip" -d "$NAPCAT_DIR"
+        info "NapCatQQ 安装完成: $NAPCAT_DIR"
+    else
+        info "NapCatQQ 已安装: $NAPCAT_DIR"
+    fi
+
+    # macOS: 桥接沙盒版 QQ 的版本信息 + 签名原生模块（每次启动都检查）
+    if [ "$OS" = "Darwin" ]; then
+        local qq_config_dir="$HOME/Library/Application Support/QQ/versions"
+        local sandbox_config="$HOME/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/versions/config.json"
+        if [ -f "$sandbox_config" ] && [ ! -f "$qq_config_dir/config.json" ]; then
+            mkdir -p "$qq_config_dir"
+            ln -sf "$sandbox_config" "$qq_config_dir/config.json"
+            info "已桥接 QQ 版本信息"
+        fi
+
+        local qq_pkg="$NAPCAT_DIR/qq_package.json"
+        if [ ! -f "$qq_pkg" ]; then
+            cat > "$qq_pkg" << 'EOFPKG'
+{"version": "6.9.93-47354", "buildVersion": "47354", "name": "qq"}
+EOFPKG
+        fi
+
+        # 签名 NapCatQQ 原生模块（解决 macOS Gatekeeper 阻止加载未签名 dylib）
+        find "$NAPCAT_DIR/native" -name "*.node" -type f 2>/dev/null | while read -r f; do
+            codesign --remove-signature "$f" 2>/dev/null || true
+            codesign --sign - "$f" 2>/dev/null || true
+        done
+    fi
 }
 
 check_qq() {

@@ -35,22 +35,27 @@ class NapCatInstance:
         self._ready = False
 
     def _find_napcat(self) -> str | None:
-        for maybe in [
-            "/opt/NapCatQQ/napcat.sh",
-            os.path.expanduser("~/NapCatQQ/napcat.sh"),
-        ]:
-            if os.path.exists(maybe):
-                return maybe
+        # v4.x: napcat.mjs (Node.js), v3.x: napcat.sh
+        for entry in ["napcat.mjs", "napcat.sh"]:
+            for base in ["/opt/NapCatQQ", os.path.expanduser("~/NapCatQQ")]:
+                p = os.path.join(base, entry)
+                if os.path.exists(p):
+                    return p
         for cmd in ["napcat", "napcat.sh"]:
             if shutil.which(cmd):
                 return cmd
         return None
 
+    def _napcat_home(self) -> Path:
+        """NapCatQQ 安装目录（napcat.mjs / napcat.sh 所在目录）。"""
+        if self.napcat_path:
+            return Path(self.napcat_path).resolve().parent
+        return Path.home() / "NapCatQQ"
+
     def ensure_config(self) -> bool:
-        """生成 NapCatQQ 的 OneBot 配置。"""
-        self.inst_dir.mkdir(parents=True, exist_ok=True)
-        config_dir = self.inst_dir / "config"
-        config_dir.mkdir(exist_ok=True)
+        """生成 NapCatQQ 的 OneBot 配置文件。"""
+        config_dir = self._napcat_home() / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
 
         onebot_config = {
             "musicSignUrl": "",
@@ -82,8 +87,8 @@ class NapCatInstance:
             "fileLogLevel": "info",
             "consoleLogLevel": "info",
         }
-        napcat_path = config_dir / f"napcat_{self.qq}.json"
-        napcat_path.write_text(json.dumps(napcat_config, indent=2, ensure_ascii=False))
+        napcat_path_cfg = config_dir / f"napcat_{self.qq}.json"
+        napcat_path_cfg.write_text(json.dumps(napcat_config, indent=2, ensure_ascii=False))
 
         webui_config = {"host": "127.0.0.1", "port": self.webui_port, "token": "", "loginRate": 3}
         webui_path = config_dir / "webui.json"
@@ -91,19 +96,45 @@ class NapCatInstance:
 
         return True
 
+    def _setup_macos_env(self, env: dict[str, str], napcat_home: Path):
+        """macOS: 设置环境变量让 NapCatQQ 找到沙盒版 QQ 资源。"""
+        sandbox_config = os.path.expanduser(
+            "~/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/versions/config.json"
+        )
+        if os.path.exists(sandbox_config):
+            env["NAPCAT_QQ_VERSION_CONFIG_PATH"] = sandbox_config
+
+        pkg_json = napcat_home / "qq_package.json"
+        if pkg_json.exists():
+            env["NAPCAT_QQ_PACKAGE_INFO_PATH"] = str(pkg_json)
+
+        wrapper_node = "/Applications/QQ.app/Contents/Resources/app/wrapper.node"
+        if os.path.exists(wrapper_node):
+            env["NAPCAT_WRAPPER_PATH"] = wrapper_node
+
+        # 禁用多进程模式（macOS 上 fork worker 会立即退出）
+        env["NAPCAT_DISABLE_MULTIPROCESSING"] = "1"
+
     async def start(self) -> bool:
         """启动 NapCatQQ 实例。"""
         if not self.napcat_path:
-            logger.error(f"[{self.qq}] 未找到 NapCatQQ，请先安装。")
+            logger.error(f"[{self.qq}] 未找到 NapCatQQ，请先安装（运行 ./start.sh）。")
             return False
 
         self.ensure_config()
 
+        napcat_home = self._napcat_home()
         env = os.environ.copy()
-        env["NAPCAT_WORKSPACE"] = str(self.inst_dir)
+        if sys.platform == "darwin":
+            self._setup_macos_env(env, napcat_home)
 
         try:
-            if self.napcat_path.endswith(".sh"):
+            if self.napcat_path.endswith(".mjs"):
+                if not shutil.which("node"):
+                    logger.error(f"[{self.qq}] NapCatQQ v4.x 需要 Node.js，请先安装。")
+                    return False
+                cmd = ["node", self.napcat_path, "-q", self.qq]
+            elif self.napcat_path.endswith(".sh"):
                 cmd = ["bash", self.napcat_path, "-q", self.qq]
             else:
                 cmd = [self.napcat_path, "-q", self.qq]
@@ -111,13 +142,14 @@ class NapCatInstance:
             self.process = subprocess.Popen(
                 cmd,
                 env=env,
-                cwd=str(self.inst_dir),
+                cwd=str(napcat_home),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 preexec_fn=os.setsid if sys.platform != "win32" else None,
             )
             asyncio.create_task(self._read_output())
+            logger.info(f"[{self.qq}] NapCatQQ 已启动 (PID: {self.process.pid})")
             return True
         except Exception as e:
             logger.error(f"[{self.qq}] 启动失败: {e}")
