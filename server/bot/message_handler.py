@@ -5,7 +5,6 @@
 
 import asyncio
 import logging
-import random
 import re
 import time
 from datetime import datetime, timezone
@@ -13,7 +12,7 @@ from datetime import datetime, timezone
 import httpx
 
 from server.bot.mood import get_mood
-from server.bot.persona import PERSONA_SYSTEM_PROMPT, FALLBACK_RESPONSES
+from server.bot.persona import PERSONA_SYSTEM_PROMPT
 from server.config import get_instance_config
 from server.memory.manager import get_memory_manager
 from server.memory.context import ContextManager
@@ -22,6 +21,44 @@ from server.search.bing import bing_search, format_search_results, needs_search
 logger = logging.getLogger("dudushark.message")
 
 SPLIT_PATTERN = re.compile(r"(?<=[。！？\n])\s*")
+
+LLM_RETRIES = 3
+LLM_RETRY_BASE_DELAY = 2.0  # seconds, doubled each retry: 2, 4, 8
+
+
+def _is_retryable(status: int) -> bool:
+    return status in (429, 500, 502, 503, 504)
+
+
+async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
+    """Call LLM API with exponential backoff retry. Raises on final failure."""
+    last_err: str = ""
+    for attempt in range(LLM_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    base_url,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"].strip()
+            if _is_retryable(resp.status_code):
+                last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            else:
+                raise RuntimeError(f"LLM API 错误 {resp.status_code}: {resp.text[:300]}")
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+            last_err = str(e)
+        except RuntimeError:
+            raise  # non-retryable HTTP errors
+
+        if attempt < LLM_RETRIES - 1:
+            delay = LLM_RETRY_BASE_DELAY * (2 ** attempt)
+            logger.warning(f"LLM 调用失败 (尝试 {attempt+1}/{LLM_RETRIES}): {last_err}，{delay:.0f}s 后重试...")
+            await asyncio.sleep(delay)
+
+    raise RuntimeError(f"LLM 调用失败（已重试 {LLM_RETRIES} 次）: {last_err}")
 
 PRIVATE_MAX_WINDOW = 16.0   # 私聊最大累计等待
 GROUP_MAX_WINDOW = 24.0     # 群聊最大累计等待
@@ -217,12 +254,8 @@ class MessageHandler:
             except Exception:
                 pass
 
-        # 调用 LLM
+        # 调用 LLM（带重试）
         llm = self.cfg.llm
-        headers = {
-            "Authorization": f"Bearer {llm.api_key}",
-            "Content-Type": "application/json",
-        }
         payload = {
             "model": llm.model,
             "messages": messages,
@@ -231,17 +264,10 @@ class MessageHandler:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.post(llm.base_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    full_reply = data["choices"][0]["message"]["content"].strip()
-                else:
-                    logger.warning(f"LLM API 错误 {resp.status_code}: {resp.text[:300]}")
-                    full_reply = random.choice(FALLBACK_RESPONSES)
+            full_reply = await _call_llm(llm.base_url, llm.api_key, payload)
         except Exception as e:
-            logger.error(f"LLM 调用失败: {e}")
-            full_reply = random.choice(FALLBACK_RESPONSES)
+            logger.error(f"LLM 调用最终失败: {e}")
+            return [ReplyPart("啊呜...咱这边信号不太好，等会儿再试试好不好？")]
 
         if full_reply.strip() == "[SKIP]":
             return []
@@ -338,20 +364,12 @@ class MessageHandler:
         ]
 
         llm = self.cfg.llm
-        headers = {"Authorization": f"Bearer {llm.api_key}", "Content-Type": "application/json"}
         payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(512)}
 
         try:
-            async with httpx.AsyncClient(timeout=45) as client:
-                resp = await client.post(llm.base_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    text = data["choices"][0]["message"]["content"].strip()
-                else:
-                    logger.warning(f"Proactive LLM error {resp.status_code}: {resp.text[:200]}")
-                    return None
+            text = await _call_llm(llm.base_url, llm.api_key, payload, timeout=45)
         except Exception as e:
-            logger.error(f"Proactive LLM call failed: {e}")
+            logger.error(f"Proactive LLM 最终失败: {e}")
             return None
 
         if not text or text.strip() == "[SKIP]":
