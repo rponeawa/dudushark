@@ -115,9 +115,6 @@ class MessageHandler:
 
     def _get_history(self, user_id: str, group_id: str = "", max_len: int = 40) -> list[dict]:
         key = self._conv_key(user_id, group_id)
-        # 群聊只保留最近 12 条，避免旧上下文干扰
-        if group_id:
-            max_len = 12
         return self._conversations.get(key, [])[-max_len:]
 
     def _append_history(self, user_id: str, role: str, content: str, group_id: str = "", proactive: bool = False):
@@ -262,7 +259,11 @@ class MessageHandler:
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
 
         history = self._get_history(user_id, group_id)
-        fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
+        # 群聊用激进压缩（小 budget），私聊用正常压缩
+        ctx = self.ctx
+        if is_group:
+            ctx = ContextManager(max_tokens=4000, reserve_for_reply=1000)
+        fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
         # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
