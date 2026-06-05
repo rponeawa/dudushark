@@ -64,7 +64,7 @@ export default function App() {
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         <div className="sidebar-top">
           <button className="sidebar-logo" onClick={() => { navigate("/"); if (window.innerWidth <= 700) setSidebarOpen(false); }}>
-            <span className="material-symbols-outlined sidebar-logo-icon">pets</span>
+            <span className="sidebar-logo-icon">🦈</span>
             <span className="sidebar-logo-text">嘟嘟鲨鱼</span>
           </button>
           <nav className="sidebar-nav">
