@@ -300,20 +300,14 @@ async def list_conversations(qq: str):
 @router.get("/instances/{qq}/conversations/{key:path}")
 async def get_conversation(qq: str, key: str):
     handler = get_message_handler(qq)
-    parts = key.split(":")
-    user_id = parts[0]
-    group_id = parts[1] if len(parts) > 1 else ""
-    msgs = handler.get_conversation(user_id, group_id)
+    msgs = handler.get_conversation(key=key)
     return {"key": key, "messages": msgs}
 
 
 @router.delete("/instances/{qq}/conversations/{key:path}")
 async def clear_conversation(qq: str, key: str):
     handler = get_message_handler(qq)
-    parts = key.split(":")
-    user_id = parts[0]
-    group_id = parts[1] if len(parts) > 1 else ""
-    handler.clear_conversation(user_id, group_id)
+    handler.clear_conversation(key=key)
     return {"ok": True}
 
 

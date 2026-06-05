@@ -110,7 +110,8 @@ class MessageHandler:
         self._buffers: dict[tuple[str, str], dict] = {}
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
-        return f"{user_id}:{group_id}" if group_id else user_id
+        # 群聊所有用户共享对话历史，私聊各自独立
+        return group_id if group_id else user_id
 
     def _get_history(self, user_id: str, group_id: str = "", max_len: int = 40) -> list[dict]:
         key = self._conv_key(user_id, group_id)
@@ -507,12 +508,13 @@ class MessageHandler:
         self.cfg = get_instance_config(self.bot_qq)
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
 
-    def get_conversation(self, user_id: str, group_id: str = "") -> list[dict]:
-        return self._get_history(user_id, group_id)
+    def get_conversation(self, user_id: str = "", group_id: str = "", key: str = "") -> list[dict]:
+        k = key if key else self._conv_key(user_id, group_id)
+        return self._conversations.get(k, [])[-40:]
 
-    def clear_conversation(self, user_id: str, group_id: str = ""):
-        key = self._conv_key(user_id, group_id)
-        self._conversations.pop(key, None)
+    def clear_conversation(self, user_id: str = "", group_id: str = "", key: str = ""):
+        k = key if key else self._conv_key(user_id, group_id)
+        self._conversations.pop(k, None)
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())
