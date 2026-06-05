@@ -304,7 +304,7 @@ class MessageHandler:
         display_name = f"{clean_name}{role_tag}"
         # 群聊最终 SKIP 检查
         if is_group and not mentioned:
-            messages.append({"role": "system", "content": "（先想想：这条消息是对你说的吗？如果不是，回[SKIP]）"})
+            messages.append({"role": "system", "content": "（综合上文判断：这条消息跟你有关吗？上下文里大家在聊你、或者接着你的话在说吗？如果是路人之间闲聊，回[SKIP]）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
