@@ -115,6 +115,9 @@ class MessageHandler:
 
     def _get_history(self, user_id: str, group_id: str = "", max_len: int = 40) -> list[dict]:
         key = self._conv_key(user_id, group_id)
+        # 群聊只保留最近 12 条，避免旧上下文干扰
+        if group_id:
+            max_len = 12
         return self._conversations.get(key, [])[-max_len:]
 
     def _append_history(self, user_id: str, role: str, content: str, group_id: str = "", proactive: bool = False):
