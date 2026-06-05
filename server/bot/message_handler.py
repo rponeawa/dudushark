@@ -186,10 +186,11 @@ class MessageHandler:
 
     async def _flush_and_resolve(self, buf_key, group_id, user_id, user_name, is_group, delay):
         await asyncio.sleep(delay)
-        buf = self._buffers.pop(buf_key, None)
+        buf = self._buffers.get(buf_key)
         futures = buf.get("futures", []) if buf else []
 
         if not buf or not buf["texts"]:
+            self._buffers.pop(buf_key, None)
             for f in futures:
                 if not f.done():
                     f.set_result([])
@@ -200,7 +201,6 @@ class MessageHandler:
         msg_ids = buf.get("msg_ids", [])
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
-        # 引用时指向最后一条消息
         last_msg_id = msg_ids[-1] if msg_ids else ""
 
         async with self._lock:
@@ -208,6 +208,8 @@ class MessageHandler:
                 user_id, user_name, combined, group_id, "group" if is_group else "private", last_msg_id
             )
 
+        # LLM 调用完成后才 pop，避免期间新消息开新 buffer
+        self._buffers.pop(buf_key, None)
         for i, f in enumerate(futures):
             if not f.done():
                 f.set_result(replies if i == 0 else [])
