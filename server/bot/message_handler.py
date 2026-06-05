@@ -259,27 +259,20 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
-        # 闲聊检测：短消息限制回复长度。疑问句、戳一戳不算闲聊
-        is_casual = (len(text) < 20 and "?" not in text and "？" not in text
-                     and "谁" not in text and "怎么" not in text and "为什么" not in text
-                     and "戳" not in text and "哪" not in text)
-
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
-        format_hint = (
+        messages.append({"role": "system", "content": (
             "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
             "【重要】不管什么情况——生气、开心、难过——都必须输出JSON，不要直接写文字。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
-            "- reply: 回复文本。不说话填\"[SKIP]\"。简短精炼，每个分句短一点\n"
+            "- reply: 回复文本。不说话填\"[SKIP]\"。每个分句短一点\n"
             "- say: 先说的一句话，然后鱼去查东西\n"
             "- search: 需要查的关键词\n"
             "- quote: 是否引用回复\n"
             "- memory: 需要记住的事（冒犯过你的事一定要记！）没有就null\n"
-            "- diary: 值得写的自身经历，没有就null"
-        )
-        if is_casual:
-            format_hint += "\n\n当前是闲聊，对方只说了很短的话——最多回1~2句短句，不要多说。"
-        messages.append({"role": "system", "content": format_hint})
+            "- diary: 值得写的自身经历，没有就null\n"
+            "\n如果你觉得当前只是闲聊，就回短一点，一两句就够了，别刷屏。"
+        )})
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼（onebot_handler 已将 at 转为 "@鱼 " 前缀）
@@ -301,10 +294,6 @@ class MessageHandler:
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
         max_tok = mood.llm_max_tokens(1024)
-        if is_casual:
-            max_tok = min(max_tok, 150)
-        elif not is_group and len(text) < 50:
-            max_tok = min(max_tok, 300)
         payload = {
             "model": llm.model,
             "messages": messages,
