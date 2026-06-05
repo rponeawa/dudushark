@@ -284,7 +284,7 @@ class MessageHandler:
             "【重要】不管什么情况都必须输出JSON。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
-            "- reply: 回复文本。群聊规则：真的感兴趣、有人@鱼、或提到\"嘟嘟\"且你觉得有必要回——才回。其余一律\"[SKIP]\"\n"
+            "- reply: 回复文本。群聊规则：真的感兴趣、有人@鱼、提到\"嘟嘟\"且有必要、有人戳了戳鱼——才回。其余一律\"[SKIP]\"\n"
             "- say/search/quote/memory/diary: 同前"
         )})
 
