@@ -84,7 +84,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
         <div className="panel-header">
           <h2>添加实例</h2>
         </div>
-        <div className="form-row" style={{ alignItems: "flex-end" }}>
+        <div className="form-row">
           <div className="form-group">
             <label>QQ 号</label>
             <input
