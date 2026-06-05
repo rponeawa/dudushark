@@ -9,15 +9,16 @@
 - **角色人格** — 傲娇、善良、喜欢睡觉，自称"鱼"，口头禅"啊呜～"。遇冒犯会变脸
 - **多实例隔离** — 每个 QQ 号独立的数据目录、配置和 NapCatQQ 进程
 - **向量记忆** — ChromaDB + BAAI/bge-m3，LLM 自主增删改。支持全局日记（`__diary__`）
-- **多步执行** — 可以先发"让鱼想想..."再搜索，搜索后用自己的话转述结果
+- **多步执行** — 先说一句表示去查，再搜索，最后用自己的话转述结果。真正的异步流程
 - **JSON 格式** — 一次 LLM 调用输出 reply + quote + memory + diary，无需额外调用
 - **128K 上下文** — 超出自动压缩，prompt cache 命中率 100%（固定人设前缀）
-- **消息合并** — 同用户连续消息合并后一次回复，打字速度模拟延迟
-- **网络搜索** — Bing/DDG HTML 解析，LLM 驱动的搜索请求
+- **消息合并** — 同用户连续消息合并后一次回复，群聊多人消息共享合并窗口
+- **网络搜索** — Bing/DDG HTML 解析，关键词自动搜索 + LLM 触发搜索双路径
+- **群聊安静** — SKIP 为主，只在 @鱼/戳一戳/真正感兴趣时才开口，不刷屏
 - **全局心情系统** — 小时曲线 × 睡眠节律 × 个性偏离，影响所有行为
 - **主动消息** — 基于心情自主发起，动态唤醒间隔（3–60 分钟按活跃度调节）
-- **Web 管理面板** — 管理员/特殊角色配置、记忆浏览、对话查看、实时心情状态
-- **速率限制** — 滑动窗口 8 次/60s，指数退避重试，不超出 API 限额
+- **Web 管理面板** — 侧边栏布局，管理员配置、记忆浏览、对话查看、心情状态
+- **速率保护** — 滑动窗口 8 次/60s，指数退避重试，不超出 API 限额
 - **一键安装** — `start.sh` 自动下载 NapCatQQ、签名模块、桥接 macOS QQ 路径
 
 ## 前置条件
@@ -83,13 +84,13 @@ NapCatQQ (QQ客户端)
                  ├─ bot/onebot_handler.py      (OneBot 协议解析)
                  ├─ bot/message_handler.py     (消息合并缓冲 → LLM → 回复拆分)
                  ├─ bot/persona.py             (System prompt 人设)
+                 ├─ bot/mood.py                 (全局心情/睡眠系统)
                  ├─ memory/manager.py          (MD 记忆 CRUD)
                  ├─ memory/vector_store.py     (ChromaDB + embedding)
                  ├─ memory/context.py          (128K 上下文压缩)
                  ├─ search/bing.py             (Bing/DDG HTML 搜索)
-                 ├─ bot/mood.py                 (全局心情/睡眠系统)
                  ├─ bot/proactive.py           (主动消息调度)
-                 ├─ napcat/manager.py          (NapCatQQ v4.x 进程管理)
+                 ├─ napcat/manager.py          (NapCatQQ 进程管理)
                  └─ webui/routes.py            (REST API + WS 事件推送)
 ```
 
@@ -99,40 +100,25 @@ NapCatQQ (QQ客户端)
 2. 消息事件用 `create_task` 异步调度，不阻塞 WS 接收循环
 3. `message_handler.handle()` 使用 Future 机制合并同用户连续消息
 4. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
-5. 回复 `>>` 前缀表示引用回复，转为 OneBot reply segment
-6. 长回复按 `。！？\n` 自然断句拆分发送
+5. LLM 返回 JSON：`{"reply":"...","quote":false,"memory":null}`
+6. 若 JSON 含 `say`+`search`：先发 `say`，后台搜索 → 二次 LLM → 发最终回复
+7. 长回复按 `。！？\n～` 断句拆分发送，间隔 `max(2.0, len*0.08+1.0)`
+
+### 群聊行为
+
+嘟嘟在群里 SKIP 为主，只在以下情况开口：有人 @鱼、有人戳一戳、真的对话题感兴趣。不是对她说的话不接。合并窗口 10s，所有说话人合并到一个窗口。
 
 ### 全局心情系统
 
-嘟嘟拥有一个全局的心情和睡眠系统，影响她所有的行为——不仅仅是主动发言，也包括回复消息时的语气、温度和话多少。
-
-- **小时心情基线**：凌晨安静 → 晚上最活跃，但嘟嘟可以**自己决定**偏离基线（夜猫子模式、白日梦模式）
-- **睡眠状态机**：awake → sleepy → just_woke 三态随机切换，外加夜间抗拒睡意（夜猫子）、白天莫名犯困（白日梦）
-- **影响范围**：
-  - 回复消息的 LLM 温度（困时 0.75，刚醒 0.90）、最大 token 数
-  - 系统 prompt 注入当前心情描述，让 LLM 知晓自己的状态
-  - 主动发言的概率
-- **前端可见**：主面板实时显示睡眠状态 + 精力条
-
-### 主动消息
-
-嘟嘟基于全局心情系统，在曾被动回复过的私聊或群聊中偶尔主动开口。LLM 可用 `[SKIP]` 决定不说话。全局冷却 10 分钟，单对话冷却 45 分钟。
-
-唤醒间隔根据当前状态**动态调整**：
-- 嘟嘟刚回复过别人（engaged）：3–8 分钟
-- 别人在说话但嘟没参与（idle）：15–45 分钟
-- 完全安静（quiet）：30–60 分钟
-
-### Prompt 缓存优化
-
-消息构建为独立分层结构，确保同一人设 prompt 在各次调用中始终位于 `msg[0]`——LLM API 的 prefix cache 命中率 100%。记忆日期显示为 `06-04 17:04` 格式。
+小时心情曲线 × 睡眠节律（10% 概率犯困，清醒 1-2 小时）× 夜猫子/白日梦特殊状态。影响回复温度、token 数、主动发言概率。前端显示睡眠状态 + 精力条。
 
 ### 记忆系统
 
 - `data/instances/{qq}/memories/{user_id}/` — 按用户的 MD 文件
 - `data/instances/{qq}/chroma/` — ChromaDB 持久化，每个 user_id 一个 collection
 - 同一用户的私聊和群聊记忆共享
-- 嵌入失败时返回零向量，不产生虚假相似度
+- LLM 通过 JSON `memory`/`diary`/`forget` 管理增删改，相同 category+title 自动更新
+- `__diary__` — 全局日记
 
 ## WebUI API
 
@@ -155,8 +141,8 @@ dudushark/
 │   ├── bot/                # 机器人核心
 │   │   ├── onebot_handler.py
 │   │   ├── message_handler.py
-│   │   ├── persona.py      # 角色人设
 │   │   ├── mood.py         # 全局心情/睡眠
+│   │   ├── persona.py      # 角色人设
 │   │   └── proactive.py    # 主动消息调度
 │   ├── memory/             # 记忆系统
 │   │   ├── manager.py
@@ -167,15 +153,11 @@ dudushark/
 │   └── webui/routes.py     # Web API
 ├── web/                    # React 前端
 │   └── src/
-│       ├── App.tsx         # SPA 路由
+│       ├── App.tsx         # SPA 路由（侧边栏）
 │       ├── api.ts          # API 客户端
 │       └── pages/          # 页面组件
-│           ├── Status.tsx
-│           ├── Instances.tsx
-│           ├── Conversations.tsx
-│           ├── Memories.tsx
-│           └── Settings.tsx
 ├── start.sh                # 一键启动脚本
 ├── requirements.txt
-└── CLAUDE.md               # Claude Code 指引
+├── CLAUDE.md
+└── README.md
 ```
