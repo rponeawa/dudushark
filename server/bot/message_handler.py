@@ -17,7 +17,7 @@ from server.bot.persona import PERSONA_SYSTEM_PROMPT
 from server.config import get_instance_config
 from server.memory.manager import get_memory_manager
 from server.memory.context import ContextManager
-from server.search.bing import bing_search, format_search_results, needs_search
+from server.search.bing import bing_search, format_search_results
 
 logger = logging.getLogger("dudushark.message")
 

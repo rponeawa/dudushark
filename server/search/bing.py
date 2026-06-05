@@ -3,7 +3,6 @@
 搜索引擎会自然地对对话中的不确定信息进行补充。
 """
 
-import re
 import httpx
 from bs4 import BeautifulSoup
 
@@ -89,16 +88,3 @@ def format_search_results(results: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
-def needs_search(text: str) -> bool:
-    """判断是否需要搜索：用户提问包含时效性、事实性问题时返回 True。"""
-    triggers = [
-        r"(?:最近|最新|今天|昨天|现在|当前|刚刚|最近几天)",
-        r"(?:新闻|发生了|出了什么|有什么新)",
-        r"(?:是多少|多少钱|价格|天气|温度|汇率|股价)",
-        r"(?:是什么|什么是|什么意思|定义|解释一下)",
-        r"(?:怎么(?:做|办|弄|处理|解决))",
-        r"(?:在哪里|什么地方|哪个地方|地址)",
-        r"\?|？",
-    ]
-    score = sum(1 for pat in triggers if re.search(pat, text))
-    return score >= 2 or ("?" in text or "？" in text)
