@@ -302,8 +302,8 @@ class MessageHandler:
                 role_tag = f"【{a.get('role', '?')}】"
                 break
         display_name = f"{clean_name}{role_tag}"
-        # 群聊最终 SKIP 检查（放在用户消息紧前面）
-        if is_group:
+        # 群聊最终 SKIP 检查
+        if is_group and not mentioned:
             messages.append({"role": "system", "content": "（先想想：这条消息是对你说的吗？如果不是，回[SKIP]）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
