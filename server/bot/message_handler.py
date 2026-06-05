@@ -21,7 +21,7 @@ from server.search.bing import bing_search, format_search_results, needs_search
 
 logger = logging.getLogger("dudushark.message")
 
-SPLIT_PATTERN = re.compile(r"(?<=[。！？\n])\s*")
+SPLIT_PATTERN = re.compile(r"(?<=[。！？\n～])(?<!啊呜～)\s*")
 
 LLM_RETRIES = 3
 LLM_RETRY_BASE_DELAY = 2.0  # seconds, doubled each retry: 2, 4, 8
@@ -134,7 +134,9 @@ class MessageHandler:
             return [text]
         text = text.strip()
         parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()]
-        return parts[: self.cfg.reply_split_max]
+        # 闲聊短回复限制4段，长篇最多8段
+        max_parts = 4 if len(text) < 200 else self.cfg.reply_split_max
+        return parts[:max_parts]
 
     async def handle(
         self, user_id: str, user_name: str, text: str,
