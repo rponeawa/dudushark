@@ -139,12 +139,13 @@ class NapCatInstance:
             if not os.path.exists(qq_app):
                 logger.error(f"[{self.qq}] 未找到 QQ.app")
                 return False
-            # 杀掉旧 QQ 进程，重启以加载 NapCat
+            # 杀掉旧 QQ 进程，用 --no-sandbox 重启以加载 NapCat
             subprocess.run(["pkill", "-x", "QQ"], capture_output=True)
             await asyncio.sleep(2)
-            logger.info(f"[{self.qq}] 正在启动 QQ.app（加载 NapCat）...")
-            subprocess.Popen(["open", qq_app])
-            await asyncio.sleep(6)  # 等 QQ + NapCat 完全启动
+            logger.info(f"[{self.qq}] 正在启动 QQ.app（--no-sandbox 加载 NapCat）...")
+            qq_bin = f"{qq_app}/Contents/MacOS/QQ"
+            subprocess.Popen([qq_bin, "--no-sandbox"])
+            await asyncio.sleep(6)
             logger.info(f"[{self.qq}] QQ.app 已启动，NapCat WebUI: http://127.0.0.1:6099/webui/")
             self.process = True
             return True
