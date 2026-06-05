@@ -153,6 +153,6 @@ async def spa_fallback(request: Request, path: str):
 if __name__ == "__main__":
     import uvicorn
 
-    host = sys.argv[1] if len(sys.argv) > 1 else "0.0.0.0"
+    host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8080
     uvicorn.run(app, host=host, port=port)
