@@ -137,8 +137,14 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 **隐私保护：**
 - `admins_description` 仅在发送者本人是管理员时注入 system prompt
 - 家族记忆（`family_memory` + `family_note`）仅对 role 含特定标识的成员在私聊中注入
-- 群聊中不注入个人记忆和家族记忆，日记内容禁止透露具体人名
+- 群聊中不注入个人记忆和家族记忆，全局记忆内容禁止透露具体人名
 - Persona 含隐私铁律：绝对不泄露他人记忆、私聊内容或个人信息
+
+**管理员代传话：**
+- 仅管理员私聊时可见 relay 指令，系统列出可用角色名
+- LLM 仅在明确"帮我告诉/转达/跟XX说"时输出 relay 字段
+- Handler 通过 `_relay_message()` 查找目标 QQ 并发送私聊消息
+- 非管理员和群聊完全不注入 relay 指令，无法触发
 - 记忆日期格式化为易读的 `MM-DD HH:MM` 而非 ISO 8601
 
 **JSON 格式指令：**
@@ -147,6 +153,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - diary: 同 memory 格式，值得写才写
 - forget: `{"category":"类别","title":"标题"}` — 删除记忆
 - remind: `{"at_utc": Unix时间戳, "content": "提醒内容"}` — 一次性定时提醒
+- relay: `{"to_role": "角色名", "content": "转达内容"}` — 管理员间代传话（仅私聊，仅管理员）
 - say+search: `{"say":"...","search":"..."}` — 多步搜索
 
 **角色/管理员系统：**
