@@ -114,20 +114,26 @@ class OneBotClient:
         return str(message)
 
     async def _handle_notice(self, data: dict):
-        if data.get("sub_type") == "poke" and str(data.get("target_id")) == self.bot_qq:
-            user_id = str(data.get("user_id", ""))
-            group_id = str(data.get("group_id", ""))
-            if user_id and self._on_message:
-                asyncio.create_task(self._on_message(
-                    bot_qq=self.bot_qq,
-                    user_id=user_id,
-                    user_name="",
-                    text="[戳一戳]",
-                    group_id=group_id,
-                    msg_type="group",
-                    message_id="",
-                    raw=data,
-                ))
+        logger.info(f"[{self.bot_qq}] notice: {data}")
+        sub_type = data.get("sub_type", "")
+        if sub_type == "poke":
+            target = str(data.get("target_id", ""))
+            logger.info(f"[{self.bot_qq}] poke: target={target} bot={self.bot_qq}")
+            if target == self.bot_qq:
+                user_id = str(data.get("user_id", ""))
+                group_id = str(data.get("group_id", ""))
+                logger.info(f"[{self.bot_qq}] poke matched! user={user_id} group={group_id}")
+                if user_id and self._on_message:
+                    asyncio.create_task(self._on_message(
+                        bot_qq=self.bot_qq,
+                        user_id=user_id,
+                        user_name="",
+                        text="[戳一戳]",
+                        group_id=group_id,
+                        msg_type="group",
+                        message_id="",
+                        raw=data,
+                    ))
 
     async def _handle_request(self, data: dict):
         pass
