@@ -56,6 +56,8 @@ def _is_retryable(status: int) -> bool:
 async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
     """Call LLM API with exponential backoff retry. Raises on final failure."""
     await _acquire_rate()
+    # Suppress reasoning mode (consumes token budget, produces no content)
+    payload = {**payload, "reasoning_effort": None}
     last_err: str = ""
     for attempt in range(LLM_RETRIES):
         try:
@@ -67,7 +69,22 @@ async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float =
                 )
             if resp.status_code == 200:
                 data = resp.json()
-                return data["choices"][0]["message"]["content"].strip()
+                msg = data["choices"][0]["message"]
+                content = msg.get("content", "").strip()
+                if content:
+                    return content
+                # Fallback: model in reasoning mode, extract final answer from reasoning
+                reasoning = msg.get("reasoning", "").strip()
+                if reasoning:
+                    # Try to find JSON in the last ~500 chars of reasoning
+                    tail = reasoning[-800:]
+                    m = re.search(r'\{[^{}]*"reply"[^}]*\}', tail)
+                    if not m:
+                        m = re.search(r'\{[^{}]*\}', tail)
+                    if m:
+                        return m.group(0)
+                    return reasoning[-500:]
+                return ""
             if _is_retryable(resp.status_code):
                 last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
             else:
@@ -376,7 +393,7 @@ class MessageHandler:
 
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
-        max_tok = mood.llm_max_tokens(1024)
+        max_tok = mood.llm_max_tokens()
         payload = {
             "model": llm.model,
             "messages": messages,
@@ -402,6 +419,16 @@ class MessageHandler:
                 d = json.loads(t)
                 return d if isinstance(d, dict) else None
             except (json.JSONDecodeError, TypeError):
+                # 尝试修复截断的 JSON（补全缺失的括号）
+                fixed = t.rstrip()
+                open_braces = fixed.count("{") - fixed.count("}")
+                if open_braces > 0:
+                    fixed += "}" * open_braces
+                try:
+                    d = json.loads(fixed)
+                    return d if isinstance(d, dict) else None
+                except (json.JSONDecodeError, TypeError):
+                    pass
                 # 兜底：用正则提取 reply 字段
                 m = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', t)
                 if m:
@@ -462,7 +489,7 @@ class MessageHandler:
                             fu_payload = {
                                 "model": llm.model, "messages": fu_msgs,
                                 "temperature": mood.llm_temperature(0.85),
-                                "max_tokens": mood.llm_max_tokens(1024),
+                                "max_tokens": mood.llm_max_tokens(),
                             }
                             raw2 = await _call_llm(llm.base_url, llm.api_key, fu_payload, timeout=45)
                             final_data = _parse_json(raw2) or {}
