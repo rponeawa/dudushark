@@ -28,14 +28,26 @@ class SiliconFlowEmbedding:
         self.api_key = api_key
         self.model = model
 
-    def __call__(self, texts: list[str]) -> list[list[float]]:
+    def name(self) -> str:
+        return f"siliconflow-{self.model}"
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        return self._embed(input)
+
+    def embed_query(self, input: list[str]) -> list[list[float]]:
+        return self._embed(input)
+
+    def embed_documents(self, input: list[str]) -> list[list[float]]:
+        return self._embed(input)
+
+    def _embed(self, input: list[str]) -> list[list[float]]:
         global _EMBED_FAIL_COUNT
-        if not texts:
+        if not input:
             return []
         try:
             resp = httpx.post(
                 EMBEDDING_API_URL,
-                json={"model": self.model, "input": texts, "encoding_format": "float"},
+                json={"model": self.model, "input": input, "encoding_format": "float"},
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
@@ -48,7 +60,7 @@ class SiliconFlowEmbedding:
                     logger.warning(f"嵌入 API 返回 {resp.status_code}: {resp.text[:200]}")
                 # 返回零向量而非随机向量，确保不产生虚假相似度
                 dim = 1024
-                return [[0.0] * dim for _ in texts]
+                return [[0.0] * dim for _ in input]
             _EMBED_FAIL_COUNT = 0
             data = resp.json()
             return [item["embedding"] for item in data["data"]]
@@ -57,7 +69,7 @@ class SiliconFlowEmbedding:
             if _EMBED_FAIL_COUNT <= 3 or _EMBED_FAIL_COUNT % 20 == 0:
                 logger.warning(f"嵌入 API 调用失败: {e}")
             dim = 1024
-            return [[0.0] * dim for _ in texts]
+            return [[0.0] * dim for _ in input]
 
 
 class VectorStore:
