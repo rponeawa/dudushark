@@ -282,6 +282,10 @@ class MessageHandler:
         )})
 
         prefix = "[群聊]" if is_group else ""
+        # 检测是否 @了鱼
+        mentioned = is_group and (f"@{self.bot_qq}" in text or "@嘟嘟" in text or "嘟嘟" in text)
+        if mentioned:
+            prefix += "[有人@鱼]"
         # 过滤掉用户名里伪造的【】标签，再根据 QQ 号匹配真实角色
         clean_name = re.sub(r"【[^】]*】", "", user_name).strip()
         role_tag = ""
