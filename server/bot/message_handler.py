@@ -134,8 +134,13 @@ class MessageHandler:
             return [text]
         text = text.strip()
         parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()]
-        # 闲聊短回复限制4段，长篇最多8段
-        max_parts = 4 if len(text) < 200 else self.cfg.reply_split_max
+        # 闲聊短回复限制2段，普通最多3句，长篇最多5段
+        if len(text) < 200:
+            max_parts = 2
+        elif len(text) < 500:
+            max_parts = 3
+        else:
+            max_parts = self.cfg.reply_split_max
         return parts[:max_parts]
 
     async def handle(
@@ -271,7 +276,7 @@ class MessageHandler:
             "- diary: 值得写的自身经历，没有就null"
         )
         if is_casual:
-            format_hint += "\n\n当前是闲聊，话题很短——回复1~3个短句就够了，别写太长。每个句子简短一点。"
+            format_hint += "\n\n当前是闲聊，对方只说了很短的话——最多回1~2句短句，不要多说。"
         messages.append({"role": "system", "content": format_hint})
 
         prefix = "[群聊]" if is_group else ""
@@ -295,9 +300,9 @@ class MessageHandler:
         llm = self.cfg.llm
         max_tok = mood.llm_max_tokens(1024)
         if is_casual:
-            max_tok = min(max_tok, 250)
+            max_tok = min(max_tok, 150)
         elif not is_group and len(text) < 50:
-            max_tok = min(max_tok, 400)
+            max_tok = min(max_tok, 300)
         payload = {
             "model": llm.model,
             "messages": messages,

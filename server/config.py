@@ -25,7 +25,7 @@ class BotConfig(BaseModel):
     memory_retrieval_count: int = 10
     web_search_enabled: bool = True
     reply_split_enabled: bool = True
-    reply_split_max: int = 8
+    reply_split_max: int = 5
     group_reply_ratio: float = 0.25
     private_merge_delay: float = 3.0
     group_merge_delay: float = 3.0
