@@ -106,7 +106,8 @@ class DuduMood:
 
     @staticmethod
     def _hour() -> int:
-        return datetime.now(timezone.utc).hour
+        tz = timezone(__import__("datetime").timedelta(hours=8))
+        return datetime.now(tz).hour
 
     def _full_update(self, now: float):
         self._last_update = now
