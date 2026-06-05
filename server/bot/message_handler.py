@@ -295,8 +295,8 @@ class MessageHandler:
 
         # JSON 格式指令
         messages.append({"role": "system", "content": (
-            "【SKIP规则】先判断：消息跟你有关吗？别人互相聊天你别插嘴。但如果上下文里大家明显在聊关于鱼的话题、或者接着你的话在说，你可以回。@鱼、戳你、对你提问时更应该回。纯路人聊天才SKIP。\n"
-            "如果合并消息里有多个说话人，回复时用quote引用你要回的那条，让大家知道你是在跟谁说话。\n\n"
+            "【SKIP规则 - 最重要】先判断消息是否跟你有关。结合上下文看——明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可、不太确定是不是跟你说的，一律不回。除非你超级超级感兴趣。\n"
+            "多个说话人时，回复用quote引用你要回的那条。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
             "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
@@ -319,7 +319,7 @@ class MessageHandler:
         display_name = f"{clean_name}{role_tag}"
         # 群聊最终 SKIP 检查
         if is_group and not mentioned:
-            messages.append({"role": "system", "content": "（综合上文判断：消息跟你有关吗？上下文在聊你或接着你的话吗？除非你极度感兴趣，否则路人闲聊回[SKIP]）"})
+            messages.append({"role": "system", "content": "（结合上下文判断：消息明确是跟你说的吗？模棱两可不确定的话就回[SKIP]。只有明确跟鱼有关，或者你超级感兴趣才回。）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
