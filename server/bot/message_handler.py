@@ -269,6 +269,7 @@ class MessageHandler:
 
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
         messages.append({"role": "system", "content": (
+            "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n"
             "你必须输出一个JSON对象，不要任何其他内容。\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "需要先想/查一下（多步）：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
