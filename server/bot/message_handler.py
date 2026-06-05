@@ -240,9 +240,15 @@ class MessageHandler:
         diary_text = _fmt_memories(
             self.memory.recall_by_vector("__diary__", text, n=4)
         )
+        # 群聊记忆
+        group_mem_text = ""
+        if is_group:
+            group_mem_text = _fmt_memories(
+                self.memory.recall_by_vector(f"__group__{group_id}", text, n=3)
+            )
 
         # 构建消息 — 独立 system 消息提高缓存命中率
-        # msg[0]=persona(不变→缓存命中), msg[1]=mood, msg[2]=diary, msg[3]=memories, msg[4+]=history
+        # msg[0]=persona(不变→缓存命中), msg[1]=mood, msg[2]=diary, msg[3]=group_mem, msg[4]=memories, msg[5+]=history
         mood = get_mood(self.bot_qq)
         mood.update()
         mood_context = mood.system_mood_context()
@@ -254,6 +260,9 @@ class MessageHandler:
 
         if diary_text:
             messages.append({"role": "system", "content": "## 鱼的日记（自己的经历和感受）\n" + diary_text})
+
+        if group_mem_text:
+            messages.append({"role": "system", "content": "## 关于这个群的记忆\n" + group_mem_text})
 
         if memories_text:
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
@@ -290,7 +299,8 @@ class MessageHandler:
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
             "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
-            "- say/search: 需要查东西时用"
+            "- group_memory: 关于这个群整体的事，不是个人。没有就null\n"
+            "- say/search/memory/diary: 同前"
         )})
 
         prefix = "[群聊]" if is_group else ""
@@ -412,6 +422,8 @@ class MessageHandler:
                 q = final_data.get("quote", False)
                 _save_memory(final_data.get("memory"), user_id)
                 _save_memory(final_data.get("diary"), "__diary__")
+                if is_g:
+                    _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
 
                 from server.bot.onebot_handler import onebot_server
                 client = onebot_server.get_client(self.bot_qq)
@@ -458,6 +470,8 @@ class MessageHandler:
             want_quote = data.get("quote", False)
             _save_memory(data.get("memory"), user_id)
             _save_memory(data.get("diary"), "__diary__")
+            if is_group:
+                _save_memory(data.get("group_memory"), f"__group__{group_id}")
             forget_info = data.get("forget")
             if forget_info and isinstance(forget_info, dict):
                 _save_memory({**forget_info, "action": "delete"}, user_id)
