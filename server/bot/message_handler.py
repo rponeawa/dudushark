@@ -284,11 +284,9 @@ class MessageHandler:
             "【重要】不管什么情况都必须输出JSON。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
-            "- reply: 回复文本。不说话填\"[SKIP]\"\n"
-            "- say: 先说一句表示要去查，不要直接reply\n"
-            "- search: 你要搜的关键词\n"
-            "- quote/memory/diary: 同前\n"
-            "\n不知道答案、事实性问题、需要最新信息时，用多步搜索去查，不要瞎编。闲聊回短一点，别刷屏。"
+            "- reply: 回复文本。大部分群聊消息直接填\"[SKIP]\"，真的感兴趣或@你才回\n"
+            "- say/search/quote/memory/diary: 同前\n"
+            "\n记住：群里SKIP是默认。不@你、你没感觉的消息，直接SKIP。"
         )})
 
         prefix = "[群聊]" if is_group else ""
