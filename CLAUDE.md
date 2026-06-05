@@ -60,9 +60,12 @@ NapCatQQ (QQ客户端)
 1. NapCatQQ 通过反向 WS 发送 OneBot 事件 → `onebot_handler._dispatch()`
 2. 消息类型事件用 `create_task` 调度到后台，不阻塞 WS 接收循环
 3. `message_handler.handle()` 使用 Future 机制：群聊/私聊均缓冲合并同用户连续消息，新消息重置计时器
-4. 合并窗口到期后，调用 LLM 生成回复，`[SKIP]` 表示不回复
-5. 回复文本句首 `>>` 表示引用回复，转为 OneBot reply segment
-6. 长回复按 `。！？\n` 自然断句拆分发送，间隔 1.5s
+4. 合并窗口到期后，调用 LLM 生成回复
+5. LLM 返回 JSON：`{"reply":"...","quote":bool,"memory":null|{...},"diary":null|{...},"forget":null|{...}}`
+6. 若 JSON 含 `say`+`search` 字段：先发 `say` 消息，后台搜索 → 二次 LLM → 发最终回复（真实异步多步）
+7. 长回复按 `。！？\n` 自然断句拆分发送，间隔按字数模拟打字（max(1.0, len*0.05+0.5)）
+8. `[SKIP]` 不回复，LLM 最终调用失败返回 `[]` 不回复
+9. LLM 调用带有指数退避重试（3次, 2/4/8s），全局速率限制（滑动窗口 8次/60s）
 
 **消息合并：**
 - `handle()` 返回 `list[ReplyPart]`，每个包含 `text` 和可选 `quote_msg_id`
@@ -72,7 +75,10 @@ NapCatQQ (QQ客户端)
 **记忆系统：**
 - `data/instances/{bot_qq}/memories/{user_id}/` — 按用户的 MD 文件
 - `data/instances/{bot_qq}/chroma/` — ChromaDB 持久化，每个 user_id 一个 collection
-- 同一 user_id 的私聊和群聊记忆**共享**，存储在同一个目录和 ChromaDB collection
+- 同一 user_id 的私聊和群聊记忆**共享**
+- LLM 通过 JSON `memory`/`diary`/`forget` 字段自主管理记忆增删改
+- `__diary__` — 鱼的全局日记，每次对话检索相关条目作为上下文
+- 相同 category+title → upsert 更新（看法可随时间改变），不同 → 新建
 - 嵌入失败时返回零向量（非随机向量），并记录 warning 日志
 
 **上下文压缩：**
@@ -98,9 +104,20 @@ NapCatQQ (QQ客户端)
 - 睡眠状态再叠加系数（困时 ×2.5，刚醒/夜猫子 ×0.5）
 
 **Prompt 缓存优化：**
-- LLM 消息构建为独立 system 消息：[0]=固定人设(始终命中缓存) [1]=心情 [2]=记忆 [3+]=历史
+- LLM 消息构建为独立 system 消息：[0]=固定人设(始终命中缓存) [1]=admin角色 [2]=心情 [3]=日记 [4]=记忆 [5+]=历史
 - `msg[0]` 永远不变 → prefix cache 命中率 100%
 - 记忆日期格式化为易读的 `MM-DD HH:MM` 而非 ISO 8601
+
+**角色/管理员系统：**
+- `BotConfig.admins` 列表：`[{"qq":"3151109741","role":"妈妈"}]`
+- 注入系统 prompt 让鱼识别特殊身份（自然表达对应关系）
+- 前端 Settings 页面可管理
+
+**其他关键规则：**
+- 自称"鱼"（不是"我"或"咱"）
+- 冒犯内容 → 立刻变脸厌恶，称呼"讨厌的人类"，记入记忆
+- 记忆可随时间更新：以前讨厌的人改过自新后用同一 category+title 覆盖
+- 搜索必须用鱼的语气转述，不能直接粘贴结果
 
 **NapCatQQ 安装 (start.sh)：**
 - 自动下载 NapCatQQ v4.x Framework + Shell，解压到 `~/NapCatQQ/`
