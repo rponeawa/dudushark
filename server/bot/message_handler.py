@@ -101,7 +101,7 @@ async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float =
 
     raise RuntimeError(f"LLM 调用失败（已重试 {LLM_RETRIES} 次）: {last_err}")
 
-PRIVATE_MAX_WINDOW = 20.0   # 私聊最大累计等待
+PRIVATE_MAX_WINDOW = 60.0   # 私聊最大累计等待
 GROUP_MAX_WINDOW = 60.0     # 群聊最大累计等待
 
 
