@@ -430,7 +430,7 @@ class MessageHandler:
         payload = {
             "model": llm.model,
             "messages": messages,
-            "temperature": mood.llm_temperature(0.85),
+            "temperature": mood.llm_temperature(),
             "max_tokens": max_tok,
         }
 
@@ -521,7 +521,7 @@ class MessageHandler:
                             fu_msgs.append({"role": "system", "content": ctx})
                             fu_payload = {
                                 "model": llm.model, "messages": fu_msgs,
-                                "temperature": mood.llm_temperature(0.85),
+                                "temperature": mood.llm_temperature(),
                                 "max_tokens": mood.llm_max_tokens(),
                             }
                             raw2 = await _call_llm(llm.base_url, llm.api_key, fu_payload, timeout=45)

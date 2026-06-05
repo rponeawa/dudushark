@@ -59,11 +59,11 @@ class DuduMood:
         """How likely Dudu is to speak (0.0–1.0+). Used by proactive scheduler."""
         return self.energy
 
-    def llm_temperature(self, base: float = 0.85) -> float:
+    def llm_temperature(self, base: float = 0.88) -> float:
         if self.sleep_state == "sleepy":
-            return 0.75
+            return 0.78
         if self.sleep_state == "just_woke":
-            return 0.90
+            return 0.92
         return base
 
     def llm_max_tokens(self, base: int = 2048) -> int:
