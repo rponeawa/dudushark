@@ -267,21 +267,22 @@ class MessageHandler:
         looks_like_search = bool(re.search(r"搜|查|帮.*找|帮.*看|天气|多少[钱度]|最新|新闻|现在|今天|明天", text))
 
         # JSON 格式指令
-        hint = (
+        messages.append({"role": "system", "content": (
             "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
             "【重要】不管什么情况都必须输出JSON。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
             "- reply: 回复文本。不说话填\"[SKIP]\"\n"
-            "- say: 先说一句表示要去查一下（比如让鱼想想、鱼去看看之类的），不要直接reply\n"
+            "- say: 先说一句表示要去查，不要直接reply\n"
             "- search: 你要搜的关键词\n"
             "- quote/memory/diary: 同前\n"
-            "\n不知道答案、别人问事实性问题、需要最新信息时，用多步搜索去查，不要瞎编。\n"
-            "\n闲聊回短一点，别刷屏。"
-        )
+            "\n不知道答案、事实性问题、需要最新信息时，用多步搜索去查，不要瞎编。闲聊回短一点，别刷屏。"
+        )})
+
+        # 搜索意图强烈时，注入到用户消息中
+        search_hint = ""
         if looks_like_search:
-            hint += "\n用户的消息看起来是想让你查东西——如果你确实不知道答案，请用多步搜索格式。"
-        messages.append({"role": "system", "content": hint})
+            search_hint = "（鱼不知道的话用say+search格式去查一下，不要瞎编）"
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼（onebot_handler 已将 at 转为 "@鱼 " 前缀）
@@ -296,7 +297,7 @@ class MessageHandler:
                 role_tag = f"【{a.get('role', '?')}】"
                 break
         display_name = f"{clean_name}{role_tag}"
-        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
+        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}{search_hint}"}
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
 
