@@ -156,7 +156,7 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
             群聊记忆
           </button>
           <button className={tab === "diary" ? "active" : ""} onClick={() => setTab("diary")}>
-            日记
+            全局记忆
           </button>
         </div>
 
@@ -168,7 +168,7 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
               onClick={() => loadMemories(u)}
             >
               <span className="key-text">
-                {tab === "group" ? groupIdLabel(u) : tab === "diary" ? "嘟嘟的日记" : u}
+                {tab === "group" ? groupIdLabel(u) : tab === "diary" ? "全局记忆" : u}
               </span>
             </div>
           ))}

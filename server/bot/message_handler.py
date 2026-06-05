@@ -278,7 +278,7 @@ class MessageHandler:
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
-        # 检索记忆（对人的 + 全局日记）
+        # 检索记忆（对人的 + 全局记忆）
         def _fmt_memories(mems: list[dict]) -> str:
             lines = []
             for m in mems:
@@ -312,16 +312,24 @@ class MessageHandler:
         mood.update()
         mood_context = mood.system_mood_context()
 
-        persona_text = PERSONA_SYSTEM_PROMPT.replace(
-            "{admins_description}", self.cfg.admins_description
-        )
+        # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
+        is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
+        # 群聊合并消息：检查是否包含管理员的发言
+        if not is_sender_admin and names_map:
+            for name, uid in names_map.items():
+                if any(str(a.get("qq", "")) == uid for a in self.cfg.admins):
+                    is_sender_admin = True
+                    break
+        admin_desc = self.cfg.admins_description if is_sender_admin else ""
+        persona_text = PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc)
         messages = [{"role": "system", "content": persona_text}]
 
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
 
         if diary_text:
-            messages.append({"role": "system", "content": "## 鱼的日记（自己的经历和感受）\n" + diary_text})
+            diary_note = "（注意：你可以在对话中分享心情和感悟，但不能透露其中涉及的具体人名等隐私信息）"
+            messages.append({"role": "system", "content": "## 鱼的全局记忆（自己的经历和感受）\n" + diary_note + "\n" + diary_text})
 
         if group_mem_text:
             messages.append({"role": "system", "content": "## 关于这个群的记忆\n" + group_mem_text})
@@ -353,7 +361,7 @@ class MessageHandler:
         if is_group:
             json_prompt += "\n- group_memory: 关于这个群整体的事（非个人），null居多。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}"
         json_prompt += (
-            "\n- diary: 你自己的日记，值得写的时候才写，null居多。格式同memory\n"
+            "\n- diary: 你自己的全局记忆，值得写的时候才写，null居多。格式同memory\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
@@ -714,9 +722,9 @@ class MessageHandler:
         mood = get_mood(self.bot_qq)
         mood.update()
         mood_context = mood.system_mood_context()
-        system_content = PERSONA_SYSTEM_PROMPT.replace(
-            "{admins_description}", self.cfg.admins_description
-        )
+        is_recipient_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
+        admin_desc = self.cfg.admins_description if is_recipient_admin else ""
+        system_content = PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc)
         if mood_context:
             system_content += "\n\n## 你现在的心情\n" + mood_context
         if memories_text:
