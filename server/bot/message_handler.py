@@ -263,7 +263,7 @@ class MessageHandler:
             "【重要】不管什么情况——生气、开心、难过——都必须输出JSON，不要直接写文字。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
-            "- reply: 回复文本。不说话填\"[SKIP]\"。简短精炼，不要长篇大论\n"
+            "- reply: 回复文本。不说话填\"[SKIP]\"。简短精炼，每个分句短一点\n"
             "- say: 先说的一句话，然后鱼去查东西\n"
             "- search: 需要查的关键词\n"
             "- quote: 是否引用回复\n"
@@ -271,7 +271,7 @@ class MessageHandler:
             "- diary: 值得写的自身经历，没有就null"
         )
         if is_casual:
-            format_hint += "\n\n当前是闲聊，话题很短——回复一句话就够了，最多不超过一句。"
+            format_hint += "\n\n当前是闲聊，话题很短——回复1~3个短句就够了，别写太长。每个句子简短一点。"
         messages.append({"role": "system", "content": format_hint})
 
         prefix = "[群聊]" if is_group else ""
@@ -295,7 +295,7 @@ class MessageHandler:
         llm = self.cfg.llm
         max_tok = mood.llm_max_tokens(1024)
         if is_casual:
-            max_tok = min(max_tok, 150)
+            max_tok = min(max_tok, 250)
         elif not is_group and len(text) < 50:
             max_tok = min(max_tok, 400)
         payload = {
