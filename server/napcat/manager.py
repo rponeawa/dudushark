@@ -120,6 +120,18 @@ class NapCatInstance:
 
         self.ensure_config()
 
+        # macOS：确保 QQ.app 已启动（NapCatQQ 需要注入到运行中的 QQ 进程）
+        if sys.platform == "darwin":
+            qq_app = "/Applications/QQ.app"
+            if os.path.exists(qq_app):
+                import subprocess as _sp
+                running = _sp.run(["pgrep", "-x", "QQ"], capture_output=True, text=True)
+                if running.returncode != 0:
+                    logger.info(f"[{self.qq}] QQ.app 未运行，正在启动...")
+                    _sp.Popen(["open", qq_app])
+                    await asyncio.sleep(8)  # 等 QQ 完全启动
+                    logger.info(f"[{self.qq}] QQ.app 已启动")
+
         napcat_home = self._napcat_home()
         env = os.environ.copy()
         if sys.platform == "darwin":
