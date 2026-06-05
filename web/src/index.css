@@ -165,7 +165,8 @@ textarea { resize: vertical; min-height: 70px; }
 
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .form-row > * { flex: 1; min-width: 180px; }
-.form-group { margin-bottom: 14px; }
+.form-group { margin-bottom: 10px; }
+.form-group:last-child { margin-bottom: 0; }
 
 button, .btn {
   display: inline-flex; align-items: center; gap: 6px;
