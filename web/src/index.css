@@ -281,7 +281,7 @@ button, .btn {
 
 .tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
 .tabs button {
-  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  background: none; border: none; border-radius: 0; color: var(--text-dim); cursor: pointer;
   padding: 8px 16px; font-size: 0.85rem;
   border-bottom: 2px solid transparent; margin-bottom: -1px; transition: .15s;
 }

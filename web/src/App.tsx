@@ -118,7 +118,7 @@ export default function App() {
 
       <header className="topbar">
         <button className="topbar-btn" onClick={() => setSidebarOpen((v) => !v)}>☰</button>
-        <span className="topbar-title">嘟嘟鲨鱼</span>
+        <span className="topbar-title">🦈 嘟嘟鲨鱼</span>
       </header>
 
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
