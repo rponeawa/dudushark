@@ -2,28 +2,28 @@
 
 一只来自鲨鱼星的赛博大鲨鱼 QQ 机器人，基于 [NapCatQQ](https://github.com/NapNeko/NapCatQQ) + OneBot v11 反向 WebSocket 协议。
 
-**后端**: Python/FastAPI · **前端**: React/Vite/TypeScript · **向量记忆**: ChromaDB + SiliconFlow BAAI/bge-m3
+**后端**: Python/FastAPI  **前端**: React/Vite/TypeScript  **向量记忆**: ChromaDB + SiliconFlow BAAI/bge-m3
 
 ## 特性
 
 - **角色人格** — 傲娇、善良、喜欢睡觉，自称"鱼"，口头禅"啊呜～"。遇冒犯会变脸
 - **多实例隔离** — 每个 QQ 号独立的数据目录、配置和 NapCatQQ 进程
-- **向量记忆** — ChromaDB + BAAI/bge-m3，LLM 自主增删改。支持全局日记（`__diary__`）
-- **多步执行** — 先说一句表示去查，再搜索，最后用自己的话转述结果。真正的异步流程
-- **JSON 格式** — 一次 LLM 调用输出 reply + quote + memory + diary，无需额外调用
+- **向量记忆** — ChromaDB + BAAI/bge-m3，LLM 自主增删改。支持全局日记、群聊记忆
+- **多步执行** — 先说一句表示去查，再搜索，最后用自己的话转述结果
+- **JSON 格式** — 一次 LLM 调用输出 reply + quote + memory + diary + group_memory
 - **128K 上下文** — 超出自动压缩，prompt cache 命中率 100%（固定人设前缀）
-- **消息合并** — 同用户连续消息合并后一次回复，群聊多人消息共享合并窗口
-- **网络搜索** — Bing/DDG HTML 解析，关键词自动搜索 + LLM 触发搜索双路径
-- **群聊安静** — SKIP 为主，只在 @鱼/戳一戳/真正感兴趣时才开口，不刷屏
-- **全局心情系统** — 小时曲线 × 睡眠节律 × 个性偏离，影响所有行为
-- **主动消息** — 基于心情自主发起，动态唤醒间隔（3–60 分钟按活跃度调节）
-- **Web 管理面板** — 侧边栏布局，管理员配置、记忆浏览、对话查看、心情状态
-- **速率保护** — 滑动窗口 8 次/60s，指数退避重试，不超出 API 限额
-- **一键安装** — `start.sh` 自动下载 NapCatQQ、签名模块、桥接 macOS QQ 路径
+- **消息合并** — 同用户连续消息合并后一次回复，群聊多人共享合并窗口
+- **网络搜索** — Bing/DDG HTML 解析，LLM 自主触发
+- **群聊安静** — SKIP 为主，只在 @鱼 / 戳一戳 / 真正感兴趣时开口
+- **全局心情系统** — 小时曲线 x 睡眠节律 x 个性偏离，影响回复风格
+- **主动消息** — 基于心情自主发起，动态唤醒间隔按活跃度调节
+- **Web 管理面板** — 密码鉴权，侧边栏布局，记忆管理（个人/群聊/日记），对话查看
+- **速率保护** — 滑动窗口 8次/60s，指数退避重试
 
 ## 前置条件
 
-- Python 3.10+（3.14 需 `--only-binary :all:`）
+- Linux（仅支持 Linux）
+- Python 3.10+
 - Node.js 18+
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)（QQ 机器人框架）
 - SiliconFlow API Key（向量嵌入，[注册](https://siliconflow.cn)）
@@ -40,7 +40,7 @@ cd dudushark
 cp .env.example .env
 # 编辑 .env 填入 API Key
 
-# 3. 一键启动（自动创建 venv、安装依赖、构建前端）
+# 3. 一键启动（自动安装 NapCatQQ、创建 venv、安装依赖、构建前端）
 ./start.sh
 
 # 4. 打开 WebUI
@@ -70,7 +70,8 @@ cd web && npm run dev
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `STEPFUN_API_KEY` | 是 | 阶跃星辰 LLM API Key |
-| `SILICONFLOW_API_KEY` | 是 | SiliconFlow 嵌入模型 API Key |
+| `SILICONFLOW_API_KEY` | 是 | SiliconFlow 嵌入 API Key |
+| `WEBUI_PASSWORD` | 建议 | WebUI 面板登录密码，不设置则跳过鉴权 |
 | `DUDUSHARK_DATA` | 否 | 数据目录，默认 `./data` |
 
 启动脚本 `start.sh` 会自动加载 `.env` 文件。
@@ -79,19 +80,19 @@ cd web && npm run dev
 
 ```
 NapCatQQ (QQ客户端)
-  └─ WS → ws://host:8080/onebot/v11/ws/{qq}   (OneBot v11 反向WS)
-            └─ server/main.py                  (FastAPI + WS 端点)
-                 ├─ bot/onebot_handler.py      (OneBot 协议解析)
-                 ├─ bot/message_handler.py     (消息合并缓冲 → LLM → 回复拆分)
-                 ├─ bot/persona.py             (System prompt 人设)
-                 ├─ bot/mood.py                 (全局心情/睡眠系统)
-                 ├─ memory/manager.py          (MD 记忆 CRUD)
-                 ├─ memory/vector_store.py     (ChromaDB + embedding)
-                 ├─ memory/context.py          (128K 上下文压缩)
-                 ├─ search/bing.py             (Bing/DDG HTML 搜索)
-                 ├─ bot/proactive.py           (主动消息调度)
-                 ├─ napcat/manager.py          (NapCatQQ 进程管理)
-                 └─ webui/routes.py            (REST API + WS 事件推送)
+  └─ WS  →  ws://host:8080/onebot/v11/ws/{qq}   (OneBot v11 反向WS)
+              └─ server/main.py                   (FastAPI + WS 端点)
+                   ├─ bot/onebot_handler.py       (OneBot 协议解析)
+                   ├─ bot/message_handler.py      (消息合并缓冲 → LLM → 回复拆分)
+                   ├─ bot/persona.py              (System prompt 人设)
+                   ├─ bot/mood.py                  (全局心情/睡眠系统)
+                   ├─ memory/manager.py           (MD 记忆 CRUD)
+                   ├─ memory/vector_store.py      (ChromaDB + SiliconFlow embedding)
+                   ├─ memory/context.py           (128K 上下文压缩)
+                   ├─ search/bing.py              (Bing/DDG HTML 搜索)
+                   ├─ bot/proactive.py            (主动消息调度)
+                   ├─ napcat/manager.py           (NapCatQQ 进程管理)
+                   └─ webui/routes.py             (REST API + WS 事件推送)
 ```
 
 ### 消息处理链路
@@ -100,25 +101,34 @@ NapCatQQ (QQ客户端)
 2. 消息事件用 `create_task` 异步调度，不阻塞 WS 接收循环
 3. `message_handler.handle()` 使用 Future 机制合并同用户连续消息
 4. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
-5. LLM 返回 JSON：`{"reply":"...","quote":false,"memory":null}`
-6. 若 JSON 含 `say`+`search`：先发 `say`，后台搜索 → 二次 LLM → 发最终回复
-7. 长回复按 `。！？\n～` 断句拆分发送，间隔 `max(2.0, len*0.08+1.0)`
+5. LLM 返回 JSON：`{"reply":"...","quote":false,"memory":null,"diary":null,"group_memory":null,"forget":null}`
+6. memory 带 `user` 字段指定归属人，群聊中自动映射到正确 user_id
+7. 若 JSON 含 `say`+`search`：先发 `say`，后台搜索 → 二次 LLM → 发最终回复
+8. 长回复按 `。！？\n～` 断句拆分发送，间隔 `max(2.0, len*0.08+1.0)`
 
 ### 群聊行为
 
-嘟嘟在群里 SKIP 为主，只在以下情况开口：有人 @鱼、有人戳一戳、真的对话题感兴趣。不是对她说的话不接。合并窗口 10s，所有说话人合并到一个窗口。
+嘟嘟在群里 SKIP 为主，只在以下情况开口：有人 @鱼、有人戳一戳、真的对话题感兴趣。群聊合并窗口 10s，多说话人消息合并为 `[N] name: text` 格式，LLM 可指定记忆归属。
 
 ### 全局心情系统
 
-小时心情曲线 × 睡眠节律（10% 概率犯困，清醒 1-2 小时）× 夜猫子/白日梦特殊状态。影响回复温度、token 数、主动发言概率。前端显示睡眠状态 + 精力条。
+小时心情曲线 x 睡眠节律（10% 概率犯困，清醒 1-2 小时）x 夜猫子/白日梦特殊状态。影响回复温度、token 数、主动发言概率。
 
 ### 记忆系统
 
 - `data/instances/{qq}/memories/{user_id}/` — 按用户的 MD 文件
 - `data/instances/{qq}/chroma/` — ChromaDB 持久化，每个 user_id 一个 collection
 - 同一用户的私聊和群聊记忆共享
-- LLM 通过 JSON `memory`/`diary`/`forget` 管理增删改，相同 category+title 自动更新
-- `__diary__` — 全局日记
+- LLM 通过 JSON `memory`/`diary`/`group_memory`/`forget` 管理增删改
+- `memory` 的 `user` 字段指定归属人，`names_map` 映射到正确 user_id
+- 相同 category+title 自动 upsert 更新
+- `__diary__` — 全局日记，`__group__<id>` — 群聊记忆
+- 嵌入失败时返回零向量，并记录 warning 日志
+
+### 对话持久化
+
+- 对话历史落盘到 `data/instances/{qq}/conversations/{key}.jsonl`
+- 启动时自动恢复，无条数上限
 
 ## WebUI API
 
@@ -156,8 +166,17 @@ dudushark/
 │       ├── App.tsx         # SPA 路由（侧边栏）
 │       ├── api.ts          # API 客户端
 │       └── pages/          # 页面组件
+├── tests/                  # 记忆系统测试脚本
 ├── start.sh                # 一键启动脚本
 ├── requirements.txt
 ├── CLAUDE.md
 └── README.md
+```
+
+## 测试
+
+```bash
+PYTHONPATH=. .venv/bin/python tests/test_memory.py          # 记忆 CRUD 测试
+PYTHONPATH=. .venv/bin/python tests/test_memory_natural.py  # 自然对话测试
+PYTHONPATH=. .venv/bin/python tests/test_merge_group.py     # 群聊合并测试
 ```
