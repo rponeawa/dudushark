@@ -280,12 +280,11 @@ class MessageHandler:
 
         # JSON 格式指令
         messages.append({"role": "system", "content": (
-            "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
-            "【重要】不管什么情况都必须输出JSON。格式：\n"
-            "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
-            "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
-            "- reply: 回复文本。注意区分：消息可能是对别人说的不是对你说的。群聊除非：你超级感兴趣、有人@鱼、有人对你说\"嘟嘟\"、有人戳你——才回。其余所有情况一律\"[SKIP]\"。不是对你说的话不要接。\n"
-            "- say/search/quote/memory/diary: 同前"
+            "【群聊SKIP规则 - 最重要！】多数消息不是对你说的。只有以下情况回：你超级感兴趣、有人@鱼、有人对你说\"嘟嘟\"、有人戳你。其余一律\"[SKIP]\"。不是对你说的话不要接。\n\n"
+            "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
+            "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
+            "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
+            "- say/search: 需要查东西时用"
         )})
 
         prefix = "[群聊]" if is_group else ""
