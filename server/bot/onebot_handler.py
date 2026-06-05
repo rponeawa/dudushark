@@ -114,7 +114,20 @@ class OneBotClient:
         return str(message)
 
     async def _handle_notice(self, data: dict):
-        pass
+        if data.get("sub_type") == "poke" and str(data.get("target_id")) == self.bot_qq:
+            user_id = str(data.get("user_id", ""))
+            group_id = str(data.get("group_id", ""))
+            if user_id and self._on_message:
+                asyncio.create_task(self._on_message(
+                    bot_qq=self.bot_qq,
+                    user_id=user_id,
+                    user_name="",
+                    text="[戳一戳]",
+                    group_id=group_id,
+                    msg_type="group",
+                    message_id="",
+                    raw=data,
+                ))
 
     async def _handle_request(self, data: dict):
         pass
