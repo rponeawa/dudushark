@@ -262,7 +262,7 @@ class MessageHandler:
         # 群聊用激进压缩（小 budget），私聊用正常压缩
         ctx = self.ctx
         if is_group:
-            ctx = ContextManager(max_tokens=4000, reserve_for_reply=1000)
+            ctx = ContextManager(max_tokens=2500, reserve_for_reply=500)
         fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
         # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
