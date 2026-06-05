@@ -111,17 +111,20 @@ body, #root { min-height: 100vh; }
 }
 .sidebar-logout:hover { background: var(--bg-hover); color: var(--red); border-color: var(--red); }
 
-/* ---- Sidebar Toggle ---- */
+/* ---- Top Bar ---- */
 
-.sidebar-toggle {
-  position: fixed; top: 10px; left: 10px; z-index: 300;
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 250;
+  background: var(--bg-panel); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 12px; gap: 10px;
+}
+.topbar-btn {
   width: 36px; height: 36px; border-radius: var(--radius);
-  background: var(--bg-panel); border: 1px solid var(--border);
+  background: none; border: 1px solid var(--border);
   color: var(--text); font-size: 1.1rem; cursor: pointer;
   display: none; align-items: center; justify-content: center;
-  transition: left 0.25s ease;
 }
-.sidebar.open ~ .sidebar-toggle { left: 186px; }
+.topbar-title { font-size: 1rem; font-weight: 700; color: var(--text-bright); }
 
 .sidebar-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199;
@@ -131,7 +134,7 @@ body, #root { min-height: 100vh; }
 
 .main-content {
   flex: 1; margin-left: 0;
-  padding: 24px 20px 60px; max-width: 1200px; width: 100%;
+  padding: 64px 20px 60px; max-width: 1200px; width: 100%;
   transition: margin-left 0.25s ease;
 }
 
@@ -331,11 +334,10 @@ button, .btn {
 /* ---- Responsive ---- */
 
 @media (max-width: 700px) {
-  .sidebar-toggle { display: flex; }
+  .topbar-btn { display: flex; }
   .sidebar-overlay.show { display: block; }
   .sidebar { z-index: 210; }
-  .sidebar-toggle { z-index: 220; }
-  .main-content { padding: 12px 8px 40px; margin-left: 0; }
+  .main-content { padding: 56px 8px 40px; margin-left: 0; }
   .panel { padding: 14px; }
   .form-row { flex-direction: column; }
   .instance-grid { grid-template-columns: 1fr; }
@@ -351,7 +353,7 @@ button, .btn {
   html { font-size: 13px; }
   .stat-grid { grid-template-columns: 1fr; }
   .panel { padding: 12px 10px; }
-  .main-content { padding: 10px 6px 36px; }
+  .main-content { padding: 48px 6px 36px; }
   .chat-msg { max-width: 96%; }
   .instance-card h3 { font-size: 0.95rem; }
   .mem-header { gap: 6px; }
@@ -360,6 +362,5 @@ button, .btn {
 
 @media (min-width: 701px) {
   .sidebar { transform: translateX(0) !important; }
-  .sidebar-toggle { display: none; }
   .main-content { margin-left: 220px; }
 }

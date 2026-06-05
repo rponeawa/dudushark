@@ -116,6 +116,11 @@ export default function App() {
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
+      <header className="topbar">
+        <button className="topbar-btn" onClick={() => setSidebarOpen((v) => !v)}>☰</button>
+        <span className="topbar-title">嘟嘟鲨鱼</span>
+      </header>
+
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         <div className="sidebar-top">
           <button className="sidebar-logo" onClick={() => { navigate("/"); if (window.innerWidth <= 700) setSidebarOpen(false); }}>
@@ -143,14 +148,6 @@ export default function App() {
           <button className="sidebar-logout" onClick={handleLogout}>退出登录</button>
         </div>
       </aside>
-
-      <button
-        className="sidebar-toggle"
-        onClick={() => setSidebarOpen((v) => !v)}
-        title={sidebarOpen ? "收起侧边栏" : "展开侧边栏"}
-      >
-        {sidebarOpen ? "✕" : "☰"}
-      </button>
 
       <main className="main-content">
         <Routes>
