@@ -55,6 +55,8 @@ class BotConfig(BaseModel):
     mood_enabled: bool = True
     # Admin list
     admins: list[dict] = []
+    # 管理员角色描述（注入 system prompt，不提交到 GitHub）
+    admins_description: str = ""
 
 
 def load_global_config() -> dict:

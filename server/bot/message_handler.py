@@ -295,7 +295,10 @@ class MessageHandler:
         mood.update()
         mood_context = mood.system_mood_context()
 
-        messages = [{"role": "system", "content": PERSONA_SYSTEM_PROMPT}]
+        persona_text = PERSONA_SYSTEM_PROMPT.replace(
+            "{admins_description}", self.cfg.admins_description
+        )
+        messages = [{"role": "system", "content": persona_text}]
 
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
@@ -640,7 +643,9 @@ class MessageHandler:
         mood = get_mood(self.bot_qq)
         mood.update()
         mood_context = mood.system_mood_context()
-        system_content = PERSONA_SYSTEM_PROMPT
+        system_content = PERSONA_SYSTEM_PROMPT.replace(
+            "{admins_description}", self.cfg.admins_description
+        )
         if mood_context:
             system_content += "\n\n## 你现在的心情\n" + mood_context
         if memories_text:
