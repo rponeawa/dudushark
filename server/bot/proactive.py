@@ -85,11 +85,21 @@ class ProactiveScheduler:
         hour = datetime.now(tz).hour
         return hour >= 22 or hour < 8
 
-    def _should_speak_now(self) -> bool:
-        if not self._cfg.proactive_enabled:
+    # 允许睡眠时段主动联系的 memory 标记
+    SLEEP_OVERRIDE_CATEGORY = "__proactive__"
+    SLEEP_OVERRIDE_TITLE = "sleep_allow"
+
+    def _has_sleep_override(self, user_id: str) -> bool:
+        """检查用户是否明确要求过嘟嘟在睡眠时间主动找TA。"""
+        try:
+            handler = get_message_handler(self.bot_qq)
+            mems = handler.memory.recall_by_category(user_id, self.SLEEP_OVERRIDE_CATEGORY)
+            return any(self.SLEEP_OVERRIDE_TITLE in m.get("text", "") for m in mems)
+        except Exception:
             return False
 
-        if self._is_sleep_time():
+    def _should_speak_now(self) -> bool:
+        if not self._cfg.proactive_enabled:
             return False
 
         now = self._now()
@@ -110,6 +120,7 @@ class ProactiveScheduler:
         if not eligible:
             return None
 
+        in_sleep = self._is_sleep_time()
         now = self._now()
         candidates = []
         weights = []
@@ -118,6 +129,10 @@ class ProactiveScheduler:
             # Per-conversation cooldown
             last_pro = self._last_conv_proactive.get(conv_key, 0)
             if now - last_pro < self._cfg.proactive_per_conv_cooldown_sec:
+                continue
+
+            # 睡眠时段只联系明确允许打扰的用户
+            if in_sleep and not self._has_sleep_override(user_id):
                 continue
 
             w = self._cfg.proactive_private_probability if not group_id else self._cfg.proactive_group_probability
