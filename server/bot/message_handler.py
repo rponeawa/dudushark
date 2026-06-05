@@ -390,6 +390,16 @@ class MessageHandler:
         if _is_family and not is_group and self.cfg.family_note:
             messages.append({"role": "system", "content": self.cfg.family_note})
 
+        # 管理员代传话：仅在发送者是管理员时告知此能力
+        if is_sender_admin and not is_group:
+            admin_roles = [a.get("role","") for a in self.cfg.admins if a.get("role")]
+            role_list = "、".join(admin_roles) if admin_roles else "无"
+            messages.append({"role": "system", "content": (
+                f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
+                "例-小妈说\"帮我告诉妈妈明天去看她\"→{\"reply\":\"好的～鱼这就去告诉妈妈，啊呜～\",\"relay\":{\"to_role\":\"妈妈\",\"content\":\"小妈说明天去看你\"}}\n"
+                "只有\"帮我告诉XX / 帮我转达给XX / 跟XX说\"才触发。\"想XX了\"\"XX最近怎样\"这类不是转达，不要用 relay。"
+            )})
+
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼 或引用了鱼的发言（合并消息里任意一条命中就算）
         mentioned = is_group and ("@鱼" in text or "[回复鱼]" in text)
@@ -532,6 +542,9 @@ class MessageHandler:
                 remind_final = final_data.get("remind")
                 if remind_final and isinstance(remind_final, dict):
                     self._save_remind(remind_final, user_id, group_id)
+                relay_final = final_data.get("relay")
+                if relay_final and isinstance(relay_final, dict) and is_sender_admin:
+                    asyncio.create_task(self._relay_message(relay_final, user_id))
 
                 from server.bot.onebot_handler import onebot_server
                 client = onebot_server.get_client(self.bot_qq)
@@ -585,6 +598,9 @@ class MessageHandler:
             remind_info = data.get("remind")
             if remind_info and isinstance(remind_info, dict):
                 self._save_remind(remind_info, user_id, group_id)
+            relay_info = data.get("relay")
+            if relay_info and isinstance(relay_info, dict) and is_sender_admin:
+                asyncio.create_task(self._relay_message(relay_info, user_id))
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -672,6 +688,38 @@ class MessageHandler:
             logger.info(f"[{self.bot_qq}] Reminder saved: at_utc={at_utc} for {user_id}")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Failed to save reminder: {e}")
+
+    async def _relay_message(self, relay: dict, from_user_id: str):
+        """代传话给另一位管理员。仅管理员之间可用。"""
+        try:
+            to_role = str(relay.get("to_role", "")).strip()
+            content = str(relay.get("content", "")).strip()
+            if not to_role or not content:
+                return
+            # 查找目标管理员的 QQ 号
+            target_qq = None
+            for a in self.cfg.admins:
+                if a.get("role", "") == to_role:
+                    target_qq = str(a.get("qq", ""))
+                    break
+            if not target_qq or target_qq == from_user_id:
+                return
+            # 查找来源管理员的角色名
+            from_role = ""
+            for a in self.cfg.admins:
+                if str(a.get("qq", "")) == from_user_id:
+                    from_role = a.get("role", "")
+                    break
+            from_label = f"【{from_role}】" if from_role else "管理员"
+            relay_text = f"{from_label}让鱼转达：{content}"
+
+            from server.bot.onebot_handler import onebot_server
+            client = onebot_server.get_client(self.bot_qq)
+            if client and client.connected:
+                await client.send_private_msg(target_qq, relay_text)
+                logger.info(f"[{self.bot_qq}] Relay: {from_user_id}({from_role}) -> {target_qq}({to_role})")
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Relay failed: {e}")
 
     def get_conversation(self, user_id: str = "", group_id: str = "", key: str = "") -> list[dict]:
         k = key if key else self._conv_key(user_id, group_id)
