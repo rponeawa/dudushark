@@ -413,7 +413,7 @@ class MessageHandler:
                             else:
                                 await client.send_private_msg(user_id, part)
                         if pi < len(self._split_reply(reply_txt)) - 1:
-                            typing_delay = max(1.5, len(part) * 0.06 + 0.8)
+                            typing_delay = max(2.0, len(part) * 0.08 + 1.0)
                             await asyncio.sleep(typing_delay)
                     except Exception:
                         pass
