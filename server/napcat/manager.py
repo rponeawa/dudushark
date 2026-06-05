@@ -132,21 +132,21 @@ class NapCatInstance:
         """启动 NapCatQQ 实例。"""
         self.ensure_config()
 
-        # NapCat-Mac-Installer：写配置 + 拉起 QQ.app 即可（QQ 启动时自动加载 NapCat）
+        # NapCat-Mac-Installer：写配置 + 重启 QQ.app 加载 NapCat
         if self._is_mac_installer():
             logger.info(f"[{self.qq}] 检测到 NapCat-Mac-Installer，写配置到 QQ 容器")
             qq_app = "/Applications/QQ.app"
             if not os.path.exists(qq_app):
                 logger.error(f"[{self.qq}] 未找到 QQ.app")
                 return False
-            # 确保 QQ 在运行
-            result = subprocess.run(["pgrep", "-x", "QQ"], capture_output=True, text=True)
-            if result.returncode != 0:
-                logger.info(f"[{self.qq}] 正在启动 QQ.app...")
-                subprocess.Popen(["open", qq_app])
-                await asyncio.sleep(5)
-            logger.info(f"[{self.qq}] QQ.app 已启动，NapCat 将自动加载并连接")
-            self.process = True  # non-None marker for is_running
+            # 杀掉旧 QQ 进程，重启以加载 NapCat
+            subprocess.run(["pkill", "-x", "QQ"], capture_output=True)
+            await asyncio.sleep(2)
+            logger.info(f"[{self.qq}] 正在启动 QQ.app（加载 NapCat）...")
+            subprocess.Popen(["open", qq_app])
+            await asyncio.sleep(6)  # 等 QQ + NapCat 完全启动
+            logger.info(f"[{self.qq}] QQ.app 已启动，NapCat WebUI: http://127.0.0.1:6099/webui/")
+            self.process = True
             return True
 
         # 通用路径：手动运行 node napcat.mjs
