@@ -201,13 +201,10 @@ class MessageHandler:
         msg_ids = buf.get("msg_ids", [])
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
-        # 引用批内最相关的消息（@鱼/回复鱼 那条），否则最后一条
-        best_idx = -1
-        for i, t in enumerate(texts):
-            if "@鱼" in t or "[回复鱼]" in t:
-                best_idx = i
-                break
-        last_msg_id = msg_ids[best_idx] if msg_ids else ""
+        # 合并消息用序号标注，让 LLM 知道每条消息的索引
+        if len(texts) > 1:
+            combined = "\n".join(f"[{i+1}] {n}: {t}" for i, (n, t) in enumerate(zip(names, texts)))
+        last_msg_id = msg_ids[-1] if msg_ids else ""
 
         async with self._lock:
             replies = await self._handle_impl(
