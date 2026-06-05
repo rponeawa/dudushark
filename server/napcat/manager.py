@@ -127,7 +127,7 @@ class NapCatInstance:
         if sys.platform == "darwin" and os.path.exists("/Applications/QQ.app"):
             subprocess.run(["pkill", "-x", "QQ"], capture_output=True)
             await asyncio.sleep(2)
-            subprocess.Popen(["/Applications/QQ.app/Contents/MacOS/QQ"])
+            subprocess.Popen(["/Applications/QQ.app/Contents/MacOS/QQ", "--no-sandbox"])
             await asyncio.sleep(6)
             logger.info(f"[{self.qq}] QQ 已重启，NapCat 加载中")
             self.process = True
