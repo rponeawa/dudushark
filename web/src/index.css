@@ -229,7 +229,7 @@ button, .btn {
 
 /* ---- Conversation List ---- */
 
-.convo-list { display: flex; flex-direction: column; gap: 2px; }
+.convo-list { display: flex; flex-direction: column; gap: 2px; max-height: 55vh; overflow-y: auto; }
 .convo-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   background: var(--bg-card); border-radius: var(--radius); cursor: pointer; transition: .12s;
@@ -250,7 +250,7 @@ button, .btn {
 
 /* ---- Chat Bubbles ---- */
 
-.chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; padding: 4px 0; }
+.chat-log { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 280px); overflow-y: auto; padding: 4px 0; }
 .chat-msg { padding: 10px 14px; border-radius: var(--radius); font-size: 0.88rem; line-height: 1.55; }
 .chat-msg.user { background: var(--bg-card); align-self: flex-start; max-width: 82%; }
 .chat-msg.bot { background: #0f1f30; border: 1px solid var(--accent-dim); align-self: flex-end; max-width: 82%; }
