@@ -192,6 +192,7 @@ class MessageHandler:
         if existing and (now - existing["first_ts"]) < max_window:
             existing["texts"].append(text)
             existing["names"].append(user_name)
+            existing["user_ids"].append(user_id)
             existing["msg_ids"].append(message_id)
             fut: asyncio.Future = asyncio.get_event_loop().create_future()
             existing["futures"].append(fut)
@@ -206,6 +207,7 @@ class MessageHandler:
             self._buffers[buf_key] = {
                 "texts": [text],
                 "names": [user_name],
+                "user_ids": [user_id],
                 "msg_ids": [message_id],
                 "first_ts": now,
                 "futures": [fut],
@@ -229,6 +231,7 @@ class MessageHandler:
 
         texts = buf["texts"]
         names = buf.get("names", [user_name] * len(texts))
+        user_ids_batch = buf.get("user_ids", [user_id] * len(texts))
         msg_ids = buf.get("msg_ids", [])
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
@@ -236,10 +239,13 @@ class MessageHandler:
         if len(texts) > 1:
             combined = "\n".join(f"[{i+1}] {n}: {t}" for i, (n, t) in enumerate(zip(names, texts)))
         last_msg_id = msg_ids[-1] if msg_ids else ""
+        # name → user_id 映射，用于 LLM memory 中 user 字段
+        names_map = dict(zip(names, user_ids_batch))
 
         async with self._lock:
             replies = await self._handle_impl(
-                user_id, user_name, combined, group_id, "group" if is_group else "private", last_msg_id
+                user_id, user_name, combined, group_id, "group" if is_group else "private",
+                last_msg_id, names_map
             )
 
         # LLM 调用完成后才 pop，避免期间新消息开新 buffer
@@ -250,7 +256,8 @@ class MessageHandler:
 
     async def _handle_impl(
         self, user_id: str, user_name: str, text: str, group_id: str = "",
-        msg_type: str = "private", quote_msg_id: str = ""
+        msg_type: str = "private", quote_msg_id: str = "",
+        names_map: dict[str, str] | None = None,
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
@@ -313,7 +320,7 @@ class MessageHandler:
         messages.extend(history_msgs)
 
         # JSON 格式指令
-        messages.append({"role": "system", "content": (
+        json_prompt = (
             "【SKIP规则 - 最重要】先判断消息是否跟你有关。结合上下文看——明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可、不太确定是不是跟你说的，一律不回。除非你超级超级感兴趣。\n"
             "多个说话人时，回复用quote引用你要回的那条。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
@@ -321,12 +328,16 @@ class MessageHandler:
             "{\"reply\":\"...\",\"quote\":false,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
-            "- memory: 值得记住的关于这个人的事，没有就null。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。相同类别+标题会更新旧记忆\n"
-            "- diary: 你自己的日记，值得写的时候才写，null居多。格式同memory\n"
-            "- group_memory: 关于这个群整体的事（非个人），null居多。格式同memory\n"
+            "- memory: 值得记住的关于某个人的事，没有就null。格式: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。user填那个人在消息里的名字，分不清就不填。相同类别+标题会更新旧记忆"
+        )
+        if is_group:
+            json_prompt += "\n- group_memory: 关于这个群整体的事（非个人），null居多。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}"
+        json_prompt += (
+            "\n- diary: 你自己的日记，值得写的时候才写，null居多。格式同memory\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
-        )})
+        )
+        messages.append({"role": "system", "content": json_prompt})
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼 或引用了鱼的发言（合并消息里任意一条命中就算）
@@ -395,6 +406,10 @@ class MessageHandler:
         def _save_memory(mem, uid):
             if not mem or not isinstance(mem, dict):
                 return
+            # 群聊中 LLM 可通过 user 字段指定记忆归属谁
+            target_user = mem.get("user")
+            if target_user and names_map and target_user in names_map:
+                uid = names_map[target_user]
             action = mem.get("action", "save")
             cat = str(mem.get("category", "")).strip()
             title = str(mem.get("title", "")).strip()

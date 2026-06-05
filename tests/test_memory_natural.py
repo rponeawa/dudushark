@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from server.config import get_instance_config, load_global_config
 from server.memory.manager import MemoryManager, get_memory_manager

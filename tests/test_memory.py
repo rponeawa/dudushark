@@ -13,7 +13,7 @@ import httpx
 from pathlib import Path
 
 # Add project root
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from server.config import (
     load_global_config, get_instance_config, get_memory_dir,
