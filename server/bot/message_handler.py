@@ -435,6 +435,11 @@ class MessageHandler:
                 want_quote = True
                 reply_text = reply_text[2:].strip()
 
+        # 始终清理 >> 前缀（LLM 有时放在 JSON reply 字段里）
+        if reply_text.startswith(">>"):
+            want_quote = True
+            reply_text = reply_text[2:].strip()
+
         if not reply_text or reply_text.strip() == "[SKIP]":
             return []
 
