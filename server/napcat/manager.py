@@ -47,16 +47,16 @@ class NapCatInstance:
         return None
 
     def _napcat_home(self) -> Path:
-        """NapCatQQ 配置目录。"""
-        if self.napcat_path:
-            return Path(self.napcat_path).resolve().parent
+        """NapCatQQ 配置目录。优先使用 Mac Installer 路径。"""
         for p in [
             "~/Library/Application Support/QQ/NapCat",
-            "~/NapCatQQ",
+            "~/Library/Containers/com.tencent.qq/Data/Documents/napcat",
         ]:
             path = Path(os.path.expanduser(p))
             if path.exists():
                 return path
+        if self.napcat_path:
+            return Path(self.napcat_path).resolve().parent
         return Path.home() / "NapCatQQ"
 
     def ensure_config(self) -> bool:
