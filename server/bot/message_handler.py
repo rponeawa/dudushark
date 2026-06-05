@@ -151,8 +151,8 @@ class MessageHandler:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
         conv_key = self._conv_key(user_id, group_id)
-        # 群聊合并所有说话人，私聊只合并同一人
-        buf_key = (conv_key, user_name) if not is_group else (conv_key,)
+        # 群聊和私聊都只合并同一人
+        buf_key = (conv_key, user_name)
         merge_delay = self.cfg.group_merge_delay if is_group else self.cfg.private_merge_delay
         max_window = (GROUP_MAX_WINDOW if is_group else PRIVATE_MAX_WINDOW)
         now = time.time()
