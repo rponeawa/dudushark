@@ -151,8 +151,8 @@ class MessageHandler:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
         conv_key = self._conv_key(user_id, group_id)
-        # 群聊和私聊都只合并同一人
-        buf_key = (conv_key, user_name)
+        # 群聊合并所有说话人，私聊只合并同一人
+        buf_key = (conv_key, user_name) if not is_group else (conv_key,)
         merge_delay = self.cfg.group_merge_delay if is_group else self.cfg.private_merge_delay
         max_window = (GROUP_MAX_WINDOW if is_group else PRIVATE_MAX_WINDOW)
         now = time.time()
@@ -281,7 +281,8 @@ class MessageHandler:
 
         # JSON 格式指令
         messages.append({"role": "system", "content": (
-            "【SKIP规则】先判断：消息跟你有关吗？别人互相聊天你别插嘴。但如果上下文里大家明显在聊关于鱼的话题、或者接着你的话在说，你可以回。@鱼、戳你、对你提问时更应该回。纯路人聊天才SKIP。\n\n"
+            "【SKIP规则】先判断：消息跟你有关吗？别人互相聊天你别插嘴。但如果上下文里大家明显在聊关于鱼的话题、或者接着你的话在说，你可以回。@鱼、戳你、对你提问时更应该回。纯路人聊天才SKIP。\n"
+            "如果合并消息里有多个说话人，回复时用quote引用你要回的那条，让大家知道你是在跟谁说话。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
             "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
