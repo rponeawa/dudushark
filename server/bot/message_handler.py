@@ -277,7 +277,7 @@ class MessageHandler:
             "- say: 可选的，在查东西之前先说的一句话（简短）\n"
             "- search: 可选的，需要查的关键词。没有就不填\n"
             "- quote: 是否引用回复\n"
-            "- memory: 重要信息才记，不重要就null。如果对一个人的看法变了（比如以前讨厌现在改过自新），用同样的category+title去覆盖更新，不要留着旧的\n- diary: 值得写的自身经历/感受才记，null不写\n- forget: {\"category\":\"...\",\"title\":\"...\"} 删除某条记忆\n"
+            "- memory: 重要信息才记（包括冒犯过你的事），不重要就null。看法变了用同样category+title覆盖\n- diary: 值得写的自身经历/感受才记，null不写\n- forget: {\"category\":\"...\",\"title\":\"...\"} 删除某条记忆\n"
         )})
 
         prefix = "[群聊]" if is_group else ""
