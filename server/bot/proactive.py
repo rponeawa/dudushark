@@ -78,8 +78,18 @@ class ProactiveScheduler:
     def _cfg(self):
         return get_message_handler(self.bot_qq).cfg
 
+    def _is_sleep_time(self) -> bool:
+        """UTC+8: 22:00-08:00 为睡眠时段，不主动发言。"""
+        from datetime import datetime, timezone, timedelta
+        tz = timezone(timedelta(hours=8))
+        hour = datetime.now(tz).hour
+        return hour >= 22 or hour < 8
+
     def _should_speak_now(self) -> bool:
         if not self._cfg.proactive_enabled:
+            return False
+
+        if self._is_sleep_time():
             return False
 
         now = self._now()

@@ -599,10 +599,12 @@ class MessageHandler:
         return any(m.get("role") == "assistant" for m in self._conversations.get(key, []))
 
     def get_eligible_conversations(self) -> list[tuple[str, str, str, float]]:
-        """Return (conv_key, user_id, group_id, last_ts) for convos where Dudu has spoken."""
+        """Return (conv_key, user_id, group_id, last_ts) for convos where Dudu has spoken AND the other person has messaged her first."""
         results = []
         for key, msgs in self._conversations.items():
-            if not any(m.get("role") == "assistant" for m in msgs):
+            has_dudu = any(m.get("role") == "assistant" for m in msgs)
+            has_user = any(m.get("role") == "user" for m in msgs)
+            if not has_dudu or not has_user:
                 continue
             last_ts = max((m.get("ts", 0) for m in msgs), default=0)
             parts = key.split(":")
