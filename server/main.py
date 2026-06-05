@@ -5,6 +5,7 @@ FastAPI 服务 + OneBot WebSocket + React SPA
 
 import asyncio
 import logging
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -98,7 +99,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
         logger.info(f"[发送] 共{len(replies)}条回复")
         for i, part in enumerate(replies):
             try:
-                text = part.text
+                text = re.sub(r"^>>\s*", "", part.text)  # regex strip >>
                 quote_id = part.quote_msg_id
                 if quote_id:
                     if is_group:

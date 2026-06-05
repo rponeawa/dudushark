@@ -418,6 +418,7 @@ class MessageHandler:
                 target = group_id if is_g else user_id
                 for pi, part in enumerate(self._split_reply(reply_txt)):
                     try:
+                        part = re.sub(r"^>>\s*", "", part)  # strip >>
                         qid = quote_msg_id if (q and pi == 0 and quote_msg_id) else None
                         if qid:
                             if is_g:
