@@ -159,7 +159,7 @@ class DuduMood:
             return
 
         if self.sleep_state == "awake":
-            if random.random() < 0.30:
+            if random.random() < 0.10:
                 self.sleep_state = "sleepy"
                 self.sleep_state_until = now + random.randint(300, 1800)
         elif self.sleep_state == "sleepy":
@@ -167,7 +167,7 @@ class DuduMood:
             self.sleep_state_until = now + random.randint(180, 480)
         elif self.sleep_state == "just_woke":
             self.sleep_state = "awake"
-            self.sleep_state_until = now + random.randint(900, 2700)
+            self.sleep_state_until = now + random.randint(3600, 7200)
 
     def _sleep_modifier(self) -> float:
         if self.sleep_state == "sleepy":
