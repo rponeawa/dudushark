@@ -281,17 +281,34 @@ class MessageHandler:
         # 关键词预检：自动搜索并注入结果
         looks_like_search = bool(re.search(r"搜|查|帮.*找|帮.*看|天气|多少[钱度]|最新|新闻|现在|今天|明天", text))
         if looks_like_search and self.cfg.web_search_enabled:
+            # 用轻量 LLM 确认是否真的是搜索意图
+            confirm_prompt = f"用户说: {text}\n这是想让鱼帮忙搜索/查东西吗？只回 YES 或 NO。"
             try:
-                clean_q = re.sub(r"@\S+\s*", "", text).strip()  # 去 @鱼 前缀
-                results = await bing_search(clean_q)
-                if results:
-                    search_ctx = (
-                        "## 网络搜索结果（用鱼的语气自然转述，不要直接贴）\n"
-                        + format_search_results(results)
-                    )
-                    messages.append({"role": "system", "content": search_ctx})
+                confirm_payload = {
+                    "model": llm.model,
+                    "messages": [{"role": "user", "content": confirm_prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 5,
+                }
+                confirm_raw = await _call_llm(llm.base_url, llm.api_key, confirm_payload, timeout=10)
+                if "YES" in confirm_raw.upper():
+                    clean_q = re.sub(r"@\S+\s*", "", text).strip()
+                    results = await bing_search(clean_q)
+                    if results:
+                        search_ctx = (
+                            "## 网络搜索结果（用鱼的语气自然转述，不要直接贴）\n"
+                            + format_search_results(results)
+                        )
+                        messages.append({"role": "system", "content": search_ctx})
             except Exception:
-                pass
+                # LLM 确认失败时，保守起见仍然搜索
+                try:
+                    clean_q = re.sub(r"@\S+\s*", "", text).strip()
+                    results = await bing_search(clean_q)
+                    if results:
+                        messages.append({"role": "system", "content": "## 网络搜索结果\n" + format_search_results(results)})
+                except Exception:
+                    pass
 
         # JSON 格式指令
         messages.append({"role": "system", "content": (
