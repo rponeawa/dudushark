@@ -273,7 +273,7 @@ class MessageHandler:
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
             "- reply: 回复文本。不说话填\"[SKIP]\"\n"
-            "- say: 先说一句表示要去查一下（比如"让鱼想想""鱼去看看"之类的），不要直接reply\n"
+            "- say: 先说一句表示要去查一下（比如让鱼想想、鱼去看看之类的），不要直接reply\n"
             "- search: 你要搜的关键词\n"
             "- quote/memory/diary: 同前\n"
             "\n不知道答案、别人问事实性问题、需要最新信息时，用多步搜索去查，不要瞎编。\n"
