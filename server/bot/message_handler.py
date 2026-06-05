@@ -322,7 +322,7 @@ class MessageHandler:
             if mentioned:
                 messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
             else:
-                messages.append({"role": "system", "content": "（结合上下文判断：消息明确是跟你说的吗？模棱两可不确定的话就回[SKIP]。只有明确跟鱼有关，或者你超级感兴趣才回。）"})
+                messages.append({"role": "system", "content": "（判断：消息是回复你刚才说的话吗？明确跟你有关吗？是就回。模棱两可、不确定、路人闲聊，全部[SKIP]。超级感兴趣除外。）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
