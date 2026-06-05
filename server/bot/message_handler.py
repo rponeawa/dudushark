@@ -267,7 +267,8 @@ class MessageHandler:
         looks_like_search = bool(re.search(r"搜|查|帮.*找|帮.*看|天气|多少[钱度]|最新|新闻|现在|今天|明天", text))
         if looks_like_search and self.cfg.web_search_enabled:
             try:
-                results = await bing_search(text)
+                clean_q = re.sub(r"@\S+\s*", "", text).strip()  # 去 @鱼 前缀
+                results = await bing_search(clean_q)
                 if results:
                     search_ctx = (
                         "## 网络搜索结果（用鱼的语气自然转述，不要直接贴）\n"
@@ -394,8 +395,9 @@ class MessageHandler:
                             }
                             raw2 = await _call_llm(llm.base_url, llm.api_key, fu_payload, timeout=45)
                             final_data = _parse_json(raw2) or {}
-                    except Exception:
-                        pass
+                            logger.info(f"[multi-step] follow-up LLM done, reply={bool(final_data.get('reply'))}")
+                    except Exception as e2:
+                        logger.error(f"[multi-step] follow-up failed: {e2}")
 
                 reply_txt = final_data.get("reply", "") if final_data else ""
                 if not reply_txt or reply_txt.strip() == "[SKIP]":
