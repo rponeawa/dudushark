@@ -408,11 +408,12 @@ class MessageHandler:
                 _save_memory(final_data.get("memory"), user_id)
                 _save_memory(final_data.get("diary"), "__diary__")
 
-                client = None
                 from server.bot.onebot_handler import onebot_server
                 client = onebot_server.get_client(self.bot_qq)
                 if not client or not client.connected:
+                    logger.warning(f"[multi-step] client not connected, dropping reply: {reply_txt[:50]}")
                     return
+                logger.info(f"[multi-step] sending follow-up: {len(reply_txt)} chars")
                 is_g = bool(group_id)
                 target = group_id if is_g else user_id
                 for pi, part in enumerate(self._split_reply(reply_txt)):
