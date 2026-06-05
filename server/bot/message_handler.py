@@ -318,8 +318,11 @@ class MessageHandler:
                 break
         display_name = f"{clean_name}{role_tag}"
         # 群聊最终 SKIP 检查
-        if is_group and not mentioned:
-            messages.append({"role": "system", "content": "（结合上下文判断：消息明确是跟你说的吗？模棱两可不确定的话就回[SKIP]。只有明确跟鱼有关，或者你超级感兴趣才回。）"})
+        if is_group:
+            if mentioned:
+                messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
+            else:
+                messages.append({"role": "system", "content": "（结合上下文判断：消息明确是跟你说的吗？模棱两可不确定的话就回[SKIP]。只有明确跟鱼有关，或者你超级感兴趣才回。）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
