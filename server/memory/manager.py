@@ -40,13 +40,33 @@ class MemoryManager:
 
     # ---- 写入 ----
 
-    def remember(self, user_id: str, category: str, title: str, content: str):
-        """写入一条记忆，同步向量索引。"""
+    def remember(self, user_id: str, category: str, title: str, content: str) -> bool:
+        """写入或更新一条记忆，同步向量索引。返回 True=新建, False=更新。"""
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         entry_id = self._make_entry_id(user_id, category, title)
-        full_text = f"# {title}\n\n> 类型: {category}\n> 时间: {now}\n> ID: {entry_id}\n\n{content}"
-
         filepath = self._entry_file(user_id, category, title)
+        is_new = not filepath.exists()
+
+        # 如果已存在且内容相同，只刷新日期
+        if not is_new:
+            try:
+                existing = filepath.read_text(encoding="utf-8")
+                # 提取旧内容（跳过元数据头部）
+                old_body = existing.split("\n\n", 2)
+                if len(old_body) >= 3 and old_body[2].strip() == content.strip():
+                    # 内容未变，只更新时间
+                    updated = re.sub(r"时间: .+", f"时间: {now}", existing)
+                    filepath.write_text(updated, encoding="utf-8")
+                    try:
+                        vs = self._get_vs(user_id)
+                        vs.add(entry_id, updated, {"category": category, "title": title, "date": now})
+                    except Exception:
+                        pass
+                    return False
+            except Exception:
+                pass
+
+        full_text = f"# {title}\n\n> 类型: {category}\n> 时间: {now}\n> ID: {entry_id}\n\n{content}"
         filepath.write_text(full_text, encoding="utf-8")
 
         try:
@@ -54,6 +74,7 @@ class MemoryManager:
             vs.add(entry_id, full_text, {"category": category, "title": title, "date": now})
         except Exception:
             pass
+        return is_new
 
     # ---- 读取 ----
 
@@ -148,29 +169,6 @@ class MemoryManager:
             [d.name for d in inst_mem_dir.iterdir() if d.is_dir() and d.name != "chroma"]
         )
 
-    def extract_keywords(self, text: str) -> list[str]:
-        """从文本中提取可能的关键词用于记忆检索。"""
-        keywords = []
-        patterns = [
-            r"(?:我叫|我是|我的名字是|叫我)(\S{1,8})",
-            r"(?:我喜欢|我爱)(\S{1,20})",
-            r"(?:我是做|我从事|我的工作是)(\S{1,30})",
-            r"(?:我的生日是|生日在)(\S{1,20})",
-        ]
-        for pat in patterns:
-            m = re.search(pat, text)
-            if m:
-                keywords.append(m.group(0))
-        return keywords or [text[:100]]
-
-    def auto_remember_from_message(self, user_id: str, user_name: str, message: str, reply: str):
-        """从一轮对话中自动判断并存储值得记住的信息。"""
-        keywords = self.extract_keywords(message)
-        if keywords:
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-            content = f"用户 {user_name}({user_id}) 说: {message}\n咱回应: {reply}"
-            title = keywords[0].replace("/", "-")[:40]
-            self.remember(user_id, "对话记忆", title, content)
 
 
 _managers: dict[str, MemoryManager] = {}

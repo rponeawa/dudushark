@@ -286,12 +286,42 @@ class MessageHandler:
             result.append(ReplyPart(part, qid))
             self._append_history(user_id, "assistant", part, group_id)
 
-        try:
-            self.memory.auto_remember_from_message(user_id, user_name, text, full_reply)
-        except Exception:
-            pass
+        # 异步让 LLM 判断是否值得记忆（fire-and-forget）
+        asyncio.create_task(self._auto_remember_llm(user_id, user_name, text, full_reply))
 
         return result
+
+    async def _auto_remember_llm(self, user_id: str, user_name: str, message: str, reply: str):
+        """用 LLM 判断是否值得记忆以及如何归类。fire-and-forget，失败不影响主流程。"""
+        prompt = (
+            "刚才用户说：\n"
+            f"{user_name}: {message}\n\n"
+            "咱回复：\n"
+            f"{reply}\n\n"
+            "用户这段话里有没有值得咱记住的信息？（比如自我介绍、喜好、经历、事实等）\n"
+            "没有就只输出 [FORGET]。\n"
+            "有的话一行输出：类别|标题|内容\n"
+            "类别用词：个人信息、兴趣爱好、职业、重要事件、备注\n"
+            "标题简短、内容一句话概括，不要带格式。"
+        )
+        messages = [
+            {"role": "system", "content": "你是嘟嘟鲨鱼，正在整理对朋友的记忆笔记。只输出 [FORGET] 或一行记忆。"},
+            {"role": "user", "content": prompt},
+        ]
+        llm = self.cfg.llm
+        payload = {"model": llm.model, "messages": messages, "temperature": 0.3, "max_tokens": 200}
+        try:
+            result = await _call_llm(llm.base_url, llm.api_key, payload, timeout=20)
+            result = result.strip()
+            if not result or result == "[FORGET]":
+                return
+            parts = result.split("|", 2)
+            if len(parts) == 3:
+                category, title, content = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                if category and title and content:
+                    self.memory.remember(user_id, category, title, content)
+        except Exception:
+            pass  # 记忆提取失败不影响回复
 
     def reload_config(self):
         self.cfg = get_instance_config(self.bot_qq)
