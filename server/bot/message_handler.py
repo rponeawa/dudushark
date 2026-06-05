@@ -420,6 +420,9 @@ class MessageHandler:
             else:
                 messages.append({"role": "system", "content": "（判断：消息是回复你刚才说的话，或明确跟你有关吗？是就回。模棱两可、不确定、路人闲聊，全部[SKIP]。超级感兴趣除外。）"})
 
+        # 记忆最终检查：放在用户消息之前，类似 SKIP 检查
+        messages.append({"role": "system", "content": "（这轮对话有什么真正值得记的事吗？日常寒暄、随口闲聊不算。没有就memory/diary全部null。）"})
+
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
