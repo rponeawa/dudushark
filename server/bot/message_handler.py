@@ -409,6 +409,7 @@ class MessageHandler:
                 if not reply_txt or reply_txt.strip() == "[SKIP]":
                     return
                 q = final_data.get("quote", False)
+                is_g = bool(group_id)
                 _save_memory(final_data.get("memory"), user_id)
                 _save_memory(final_data.get("diary"), "__diary__")
                 if is_g:
@@ -420,7 +421,6 @@ class MessageHandler:
                     logger.warning(f"[multi-step] client not connected, dropping reply: {reply_txt[:50]}")
                     return
                 logger.info(f"[multi-step] sending follow-up: {len(reply_txt)} chars")
-                is_g = bool(group_id)
                 target = group_id if is_g else user_id
                 for pi, part in enumerate(self._split_reply(reply_txt)):
                     try:
