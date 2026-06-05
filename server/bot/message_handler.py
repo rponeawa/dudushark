@@ -150,7 +150,8 @@ class MessageHandler:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
         conv_key = self._conv_key(user_id, group_id)
-        buf_key = (conv_key, user_name)
+        # 群聊合并所有说话人，私聊只合并同一人
+        buf_key = (conv_key, user_name) if not is_group else (conv_key,)
         merge_delay = self.cfg.group_merge_delay if is_group else self.cfg.private_merge_delay
         max_window = (GROUP_MAX_WINDOW if is_group else PRIVATE_MAX_WINDOW)
         now = time.time()
@@ -158,6 +159,7 @@ class MessageHandler:
         existing = self._buffers.get(buf_key)
         if existing and (now - existing["first_ts"]) < max_window:
             existing["texts"].append(text)
+            existing["names"].append(user_name)
             existing["msg_ids"].append(message_id)
             fut: asyncio.Future = asyncio.get_event_loop().create_future()
             existing["futures"].append(fut)
@@ -171,6 +173,7 @@ class MessageHandler:
             fut: asyncio.Future = asyncio.get_event_loop().create_future()
             self._buffers[buf_key] = {
                 "texts": [text],
+                "names": [user_name],
                 "msg_ids": [message_id],
                 "first_ts": now,
                 "futures": [fut],
@@ -192,10 +195,11 @@ class MessageHandler:
             return
 
         texts = buf["texts"]
+        names = buf.get("names", [user_name] * len(texts))
         msg_ids = buf.get("msg_ids", [])
         if len(texts) > 1:
-            logger.info(f"[merge] {user_name} {len(texts)}条消息合并: {texts}")
-        combined = "\n".join(f"{user_name}: {t}" for t in texts) if len(texts) > 1 else texts[0]
+            logger.info(f"[merge] {len(texts)}条消息合并: {list(zip(names, texts))}")
+        combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
         # 引用时指向最后一条消息
         last_msg_id = msg_ids[-1] if msg_ids else ""
 
