@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -228,13 +229,23 @@ class MessageHandler:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
 
         if memories_text:
-            messages.append({"role": "system", "content": "## 咱对这个人的记忆：\n" + memories_text})
+            messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
 
         history = self._get_history(user_id, group_id)
         fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
         # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
+
+        # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
+        messages.append({"role": "system", "content": (
+            "你必须输出一个JSON对象，不要任何其他内容。格式：\n"
+            '{"reply": "回复文本", "quote": false, "memory": null}\n\n'
+            "- reply: 你的回复。不说话时填 \"[SKIP]\"\n"
+            "- quote: 是否引用回复，true/false\n"
+            "- memory: 用户消息中值得长期记住的重要信息。不是鸡毛蒜皮的小事，而是名字、职业、喜好、经历等重要事实。没有就填 null。有的话填 {\"category\": \"类别\", \"title\": \"简短标题\", \"content\": \"一句话概括\"}\n"
+            "类别用：个人信息、兴趣爱好、职业、重要事件、备注"
+        )})
 
         prefix = "[群聊]" if is_group else ""
         user_msg = {"role": "user", "content": f"{prefix}{user_name} 说: {text}"}
@@ -247,7 +258,7 @@ class MessageHandler:
                 results = await bing_search(text)
                 if results:
                     search_context = (
-                        "\n\n## 网络搜索结果（咱偷偷去查的，不要直接贴搜索结果哦，自然地用咱的语气说出来）：\n"
+                        "\n\n## 网络搜索结果（鱼偷偷去查的，不要直接贴搜索结果哦，自然地用鱼的语气说出来）：\n"
                         + format_search_results(results)
                     )
                     messages.append({"role": "system", "content": search_context})
@@ -267,61 +278,52 @@ class MessageHandler:
             full_reply = await _call_llm(llm.base_url, llm.api_key, payload)
         except Exception as e:
             logger.error(f"LLM 调用最终失败: {e}")
-            return [ReplyPart("啊呜...咱这边信号不太好，等会儿再试试好不好？")]
-
-        if full_reply.strip() == "[SKIP]":
             return []
 
-        # 解析引用标记：LLM 在句首写 >> 表示想引用回复
+        # 解析 JSON 回复（去掉可能的 markdown 代码围栏，带纯文本兜底）
+        json_text = full_reply.strip()
+        if json_text.startswith("```"):
+            json_text = json_text.split("\n", 1)[-1] if "\n" in json_text else json_text[3:]
+            if json_text.endswith("```"):
+                json_text = json_text[:-3]
+            json_text = json_text.strip()
+        reply_text = full_reply
         want_quote = False
-        if full_reply.startswith(">>"):
-            want_quote = True
-            full_reply = full_reply[2:].strip()
+        memory_info = None
+        try:
+            data = json.loads(json_text)
+            if isinstance(data, dict):
+                reply_text = data.get("reply", full_reply)
+                want_quote = data.get("quote", False)
+                memory_info = data.get("memory")
+        except (json.JSONDecodeError, TypeError):
+            # 纯文本兜底：保留旧的 >> 引用检测
+            if reply_text.startswith(">>"):
+                want_quote = True
+                reply_text = reply_text[2:].strip()
 
-        parts = self._split_reply(full_reply)
+        if reply_text.strip() == "[SKIP]":
+            return []
+
+        # 存储记忆（如果有）
+        if memory_info and isinstance(memory_info, dict):
+            cat = str(memory_info.get("category", "")).strip()
+            title = str(memory_info.get("title", "")).strip()
+            content = str(memory_info.get("content", "")).strip()
+            if cat and title and content:
+                try:
+                    self.memory.remember(user_id, cat, title, content)
+                except Exception:
+                    pass
+
+        parts = self._split_reply(reply_text)
         result = []
         for i, part in enumerate(parts):
-            # 只有第一段带引用（避免多段每条都引用）
             qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
             result.append(ReplyPart(part, qid))
             self._append_history(user_id, "assistant", part, group_id)
 
-        # 异步让 LLM 判断是否值得记忆（fire-and-forget）
-        asyncio.create_task(self._auto_remember_llm(user_id, user_name, text, full_reply))
-
         return result
-
-    async def _auto_remember_llm(self, user_id: str, user_name: str, message: str, reply: str):
-        """用 LLM 判断是否值得记忆以及如何归类。fire-and-forget，失败不影响主流程。"""
-        prompt = (
-            "刚才用户说：\n"
-            f"{user_name}: {message}\n\n"
-            "咱回复：\n"
-            f"{reply}\n\n"
-            "用户这段话里有没有值得咱记住的信息？（比如自我介绍、喜好、经历、事实等）\n"
-            "没有就只输出 [FORGET]。\n"
-            "有的话一行输出：类别|标题|内容\n"
-            "类别用词：个人信息、兴趣爱好、职业、重要事件、备注\n"
-            "标题简短、内容一句话概括，不要带格式。"
-        )
-        messages = [
-            {"role": "system", "content": "你是嘟嘟鲨鱼，正在整理对朋友的记忆笔记。只输出 [FORGET] 或一行记忆。"},
-            {"role": "user", "content": prompt},
-        ]
-        llm = self.cfg.llm
-        payload = {"model": llm.model, "messages": messages, "temperature": 0.3, "max_tokens": 200}
-        try:
-            result = await _call_llm(llm.base_url, llm.api_key, payload, timeout=20)
-            result = result.strip()
-            if not result or result == "[FORGET]":
-                return
-            parts = result.split("|", 2)
-            if len(parts) == 3:
-                category, title, content = parts[0].strip(), parts[1].strip(), parts[2].strip()
-                if category and title and content:
-                    self.memory.remember(user_id, category, title, content)
-        except Exception:
-            pass  # 记忆提取失败不影响回复
 
     def reload_config(self):
         self.cfg = get_instance_config(self.bot_qq)
@@ -365,7 +367,7 @@ class MessageHandler:
 
         context_lines = []
         for m in history:
-            role_label = "对方" if m.get("role") == "user" else "咱"
+            role_label = "对方" if m.get("role") == "user" else "鱼"
             context_lines.append(f"{role_label}: {m.get('content', '')[:200]}")
         context = "\n".join(context_lines) if context_lines else "（这是第一次和这个人说话）"
 
