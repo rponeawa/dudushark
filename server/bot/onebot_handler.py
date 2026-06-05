@@ -98,13 +98,19 @@ class OneBotClient:
             return message
         if isinstance(message, list):
             parts = []
+            mentioned = False
             for seg in message:
                 if isinstance(seg, dict):
-                    if seg.get("type") == "text":
+                    if seg.get("type") == "at":
+                        mentioned = True
+                    elif seg.get("type") == "text":
                         parts.append(seg.get("data", {}).get("text", ""))
                 elif isinstance(seg, str):
                     parts.append(seg)
-            return "".join(parts)
+            text = "".join(parts)
+            if mentioned:
+                text = "@鱼 " + text
+            return text
         return str(message)
 
     async def _handle_notice(self, data: dict):
