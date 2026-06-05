@@ -147,10 +147,20 @@ class NapCatInstance:
             )
             asyncio.create_task(self._read_output())
             logger.info(f"[{self.qq}] NapCatQQ 已启动 (PID: {self.process.pid})")
+            # 启动后几秒检查是否立即退出（常见于 macOS 沙盒版 QQ）
+            asyncio.create_task(self._check_startup())
             return True
         except Exception as e:
             logger.error(f"[{self.qq}] 启动失败: {e}")
             return False
+
+    async def _check_startup(self):
+        await asyncio.sleep(5)
+        if not self.is_running and self.process:
+            logger.error(
+                f"[{self.qq}] NapCatQQ 进程启动后立即退出。"
+                "macOS 请使用官网 QQ (im.qq.com) 而非 App Store 版，或使用 Docker。"
+            )
 
     async def _read_output(self):
         """读取 NapCatQQ 进程输出。"""
