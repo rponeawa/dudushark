@@ -77,6 +77,9 @@ class OneBotClient:
         message_id = str(data.get("message_id", ""))
 
         text = self._extract_text(data.get("message", raw_message))
+        msg_obj = data.get("message")
+        if isinstance(msg_obj, list) and any(isinstance(s, dict) and s.get("type") == "reply" for s in msg_obj):
+            logger.info(f"[{self.bot_qq}] reply segment found: {msg_obj}")
 
         if not text.strip():
             return
@@ -102,15 +105,22 @@ class OneBotClient:
             has_reply = False
             for seg in message:
                 if isinstance(seg, dict):
-                    if seg.get("type") == "at":
+                    t = seg.get("type", "")
+                    if t == "at":
                         mentioned = True
-                    elif seg.get("type") == "reply":
+                    elif t == "reply":
                         has_reply = True
-                    elif seg.get("type") == "text":
+                    elif t == "text":
                         parts.append(seg.get("data", {}).get("text", ""))
                 elif isinstance(seg, str):
                     parts.append(seg)
+            # 兜底：array 格式中 [CQ:reply,...] 也算引用
             text = "".join(parts)
+            if not has_reply and isinstance(text, str) and text.startswith("[CQ:reply"):
+                has_reply = True
+                # 提取引用的实际文本（如果有的话）
+                import re as _re
+                text = _re.sub(r"\[CQ:reply[^\]]*\]", "", text).strip()
             if mentioned:
                 text = "@鱼 " + text
             elif has_reply:
