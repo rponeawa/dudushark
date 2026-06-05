@@ -22,12 +22,12 @@ const SLEEP_LABELS: Record<string, string> = {
   daydream: "白日梦",
 };
 
-const SLEEP_EMOJI: Record<string, string> = {
+const SLEEP_ICON: Record<string, string> = {
   awake: "",
-  sleepy: "🥱",
-  just_woke: "揉眼",
-  night_owl: "🦉",
-  daydream: "💤",
+  sleepy: "bedtime",
+  just_woke: "visibility",
+  night_owl: "dark_mode",
+  daydream: "cloud",
 };
 
 function MoodCard({ mood }: { mood: MoodState }) {
@@ -47,9 +47,11 @@ function MoodCard({ mood }: { mood: MoodState }) {
       alignItems: "center",
       gap: 12,
     }}>
-      <span style={{ fontSize: "1.4rem" }}>
-        {SLEEP_EMOJI[mood.sleep_state] || ""}
-      </span>
+      {SLEEP_ICON[mood.sleep_state] ? (
+        <span className="material-symbols-outlined" style={{ fontSize: "1.4rem" }}>
+          {SLEEP_ICON[mood.sleep_state]}
+        </span>
+      ) : null}
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 2 }}>
           {SLEEP_LABELS[mood.sleep_state] || mood.sleep_state}

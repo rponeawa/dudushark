@@ -10,11 +10,11 @@ import { listInstances, InstanceInfo } from "./api";
 type Tab = { label: string; path: string; icon: string };
 
 const TABS: Tab[] = [
-  { label: "状态", path: "/", icon: "📊" },
-  { label: "实例管理", path: "/instances", icon: "🖥" },
-  { label: "对话", path: "/conversations", icon: "💬" },
-  { label: "记忆", path: "/memories", icon: "🧠" },
-  { label: "模型设置", path: "/settings", icon: "⚙" },
+  { label: "状态", path: "/", icon: "monitoring" },
+  { label: "实例管理", path: "/instances", icon: "dns" },
+  { label: "对话", path: "/conversations", icon: "chat" },
+  { label: "记忆", path: "/memories", icon: "psychology" },
+  { label: "模型设置", path: "/settings", icon: "settings" },
 ];
 
 export default function App() {
@@ -64,7 +64,7 @@ export default function App() {
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         <div className="sidebar-top">
           <button className="sidebar-logo" onClick={() => { navigate("/"); if (window.innerWidth <= 700) setSidebarOpen(false); }}>
-            <span className="sidebar-logo-icon">🦈</span>
+            <span className="material-symbols-outlined sidebar-logo-icon">pets</span>
             <span className="sidebar-logo-text">嘟嘟鲨鱼</span>
           </button>
           <nav className="sidebar-nav">
@@ -74,7 +74,7 @@ export default function App() {
                 className={`sidebar-nav-item${t.path === activeTab.path ? " active" : ""}`}
                 onClick={() => { navigate(t.path); if (window.innerWidth <= 700) setSidebarOpen(false); }}
               >
-                <span className="sidebar-nav-icon">{t.icon}</span>
+                <span className="material-symbols-outlined sidebar-nav-icon">{t.icon}</span>
                 <span className="sidebar-nav-label">{t.label}</span>
               </button>
             ))}

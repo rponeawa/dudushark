@@ -59,7 +59,7 @@ export default function Conversations({ instances, activeQQ, setActiveQQ }: Prop
           <label>选择实例</label>
           <select value={activeQQ} onChange={(e) => setActiveQQ(e.target.value)}>
             {instances.map((i) => (
-              <option key={i.qq} value={i.qq}>{i.qq} {i.connected ? "●" : "○"}</option>
+              <option key={i.qq} value={i.qq}>{i.qq} <span className={`status-dot ${i.connected ? "online" : "offline"}`} /></option>
             ))}
           </select>
         </div>

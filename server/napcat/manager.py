@@ -112,9 +112,6 @@ class NapCatInstance:
         if os.path.exists(wrapper_node):
             env["NAPCAT_WRAPPER_PATH"] = wrapper_node
 
-        # 禁用多进程模式（macOS 上 fork worker 会立即退出）
-        env["NAPCAT_DISABLE_MULTIPROCESSING"] = "1"
-
     async def start(self) -> bool:
         """启动 NapCatQQ 实例。"""
         if not self.napcat_path:
@@ -163,7 +160,7 @@ class NapCatInstance:
                 line = await loop.run_in_executor(None, self.process.stdout.readline)
                 if not line:
                     break
-                logger.debug(f"[NapCat:{self.qq}] {line.rstrip()}")
+                logger.info(f"[NapCat:{self.qq}] {line.rstrip()}")
             except Exception:
                 break
 
