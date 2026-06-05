@@ -16,7 +16,8 @@
 - **网络搜索** — Bing/DDG HTML 解析，LLM 自主触发
 - **群聊安静** — SKIP 为主，只在 @鱼 / 戳一戳 / 真正感兴趣时开口
 - **全局心情系统** — 小时曲线 x 睡眠节律 x 个性偏离，影响回复风格
-- **主动消息** — 基于心情自主发起，动态唤醒间隔按活跃度调节
+- **主动消息** — 基于心情自主发起，动态唤醒间隔按活跃度调节，睡眠时段免打扰
+- **定时提醒** — 一次性定时任务，LLM 自主计算时间戳，到点发送后自动删除
 - **Web 管理面板** — 密码鉴权，侧边栏布局，记忆管理（个人/群聊/日记），对话查看
 - **速率保护** — 滑动窗口 8次/60s，指数退避重试
 
@@ -179,4 +180,5 @@ dudushark/
 PYTHONPATH=. .venv/bin/python tests/test_memory.py          # 记忆 CRUD 测试
 PYTHONPATH=. .venv/bin/python tests/test_memory_natural.py  # 自然对话测试
 PYTHONPATH=. .venv/bin/python tests/test_merge_group.py     # 群聊合并测试
+PYTHONPATH=. .venv/bin/python tests/test_reminders.py       # 定时提醒测试
 ```

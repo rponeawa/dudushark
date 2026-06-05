@@ -5,6 +5,7 @@ Only in conversations where she has previously spoken.
 """
 
 import asyncio
+import json
 import logging
 import random
 import time
@@ -166,7 +167,49 @@ class ProactiveScheduler:
 
         return None
 
+    async def _check_reminders(self):
+        """检查并触发到期的定时提醒。发送后自动删除。"""
+        try:
+            from server.config import get_reminders_path
+            path = get_reminders_path(self.bot_qq)
+            if not path.exists():
+                return
+            reminders = json.loads(path.read_text(encoding="utf-8"))
+            if not reminders:
+                return
+
+            now = self._now()
+            remaining = []
+            for r in reminders:
+                if r.get("at_utc", float("inf")) <= now:
+                    await self._fire_reminder(r)
+                else:
+                    remaining.append(r)
+            path.write_text(json.dumps(remaining, ensure_ascii=False, indent=2))
+        except Exception:
+            pass
+
+    async def _fire_reminder(self, r: dict):
+        """发送一条提醒消息。"""
+        client = onebot_server.get_client(self.bot_qq)
+        if not client or not client.connected:
+            return
+        content = r.get("content", "")
+        user_id = r.get("user_id", "")
+        group_id = r.get("group_id", "")
+        try:
+            if group_id:
+                await client.send_group_msg(group_id, content)
+            else:
+                await client.send_private_msg(user_id, content)
+            logger.info(f"[{self.bot_qq}] Reminder fired: to={user_id or group_id}")
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Reminder send failed: {e}")
+
     async def _cycle(self):
+        # 先检查定时提醒（不受 sleep/cooldown 限制）
+        await self._check_reminders()
+
         if not self._should_speak_now():
             return
 

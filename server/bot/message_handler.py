@@ -338,8 +338,16 @@ class MessageHandler:
         json_prompt += (
             "\n- diary: 你自己的日记，值得写的时候才写，null居多。格式同memory\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
+            "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
         )
+        # 注入当前时间，让 LLM 能计算 remind 时间戳
+        now_utc = datetime.now(timezone.utc)
+        now_ts = int(now_utc.timestamp())
+        now_str = now_utc.strftime("%Y-%m-%d %H:%M UTC")
+        tz8 = timezone(__import__("datetime").timedelta(hours=8))
+        cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
+        json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
         messages.append({"role": "system", "content": json_prompt})
 
         prefix = "[群聊]" if is_group else ""
@@ -471,6 +479,9 @@ class MessageHandler:
                 _save_memory(final_data.get("diary"), "__diary__")
                 if is_g:
                     _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
+                remind_final = final_data.get("remind")
+                if remind_final and isinstance(remind_final, dict):
+                    self._save_remind(remind_final, user_id, group_id)
 
                 from server.bot.onebot_handler import onebot_server
                 client = onebot_server.get_client(self.bot_qq)
@@ -521,6 +532,9 @@ class MessageHandler:
             forget_info = data.get("forget")
             if forget_info and isinstance(forget_info, dict):
                 _save_memory({**forget_info, "action": "delete"}, user_id)
+            remind_info = data.get("remind")
+            if remind_info and isinstance(remind_info, dict):
+                self._save_remind(remind_info, user_id, group_id)
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -578,6 +592,36 @@ class MessageHandler:
     def reload_config(self):
         self.cfg = get_instance_config(self.bot_qq)
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
+
+    def _save_remind(self, remind: dict, user_id: str, group_id: str = ""):
+        """保存一次性定时提醒到 reminders.json。"""
+        try:
+            at_utc = remind.get("at_utc")
+            content = str(remind.get("content", "")).strip()
+            if not at_utc or not content:
+                return
+            at_utc = float(at_utc)
+            if at_utc <= time.time():
+                return  # 已经过期了，不保存
+            from server.config import get_reminders_path
+            path = get_reminders_path(self.bot_qq)
+            reminders = []
+            if path.exists():
+                try:
+                    reminders = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            reminders.append({
+                "at_utc": at_utc,
+                "user_id": user_id,
+                "group_id": group_id or "",
+                "content": content,
+                "created": time.time(),
+            })
+            path.write_text(json.dumps(reminders, ensure_ascii=False, indent=2))
+            logger.info(f"[{self.bot_qq}] Reminder saved: at_utc={at_utc} for {user_id}")
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Failed to save reminder: {e}")
 
     def get_conversation(self, user_id: str = "", group_id: str = "", key: str = "") -> list[dict]:
         k = key if key else self._conv_key(user_id, group_id)

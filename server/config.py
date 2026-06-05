@@ -105,6 +105,9 @@ def get_convo_dir(qq: str) -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
+def get_reminders_path(qq: str) -> Path:
+    return get_instance_dir(qq) / "reminders.json"
+
 def get_chroma_dir(qq: str) -> Path:
     p = get_instance_dir(qq) / "chroma"
     p.mkdir(parents=True, exist_ok=True)
