@@ -7,14 +7,14 @@ import Memories from "./pages/Memories";
 import Settings from "./pages/Settings";
 import { listInstances, InstanceInfo } from "./api";
 
-type Tab = { label: string; path: string };
+type Tab = { label: string; path: string; icon: string };
 
 const TABS: Tab[] = [
-  { label: "状态", path: "/" },
-  { label: "实例管理", path: "/instances" },
-  { label: "对话", path: "/conversations" },
-  { label: "记忆", path: "/memories" },
-  { label: "模型设置", path: "/settings" },
+  { label: "状态", path: "/", icon: "📊" },
+  { label: "实例管理", path: "/instances", icon: "🖥" },
+  { label: "对话", path: "/conversations", icon: "💬" },
+  { label: "记忆", path: "/memories", icon: "🧠" },
+  { label: "模型设置", path: "/settings", icon: "⚙" },
 ];
 
 export default function App() {
@@ -23,6 +23,9 @@ export default function App() {
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [activeQQ, setActiveQQ] = useState<string>("");
   const [globalStatus, setGlobalStatus] = useState("未连接");
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.innerWidth > 700
+  );
 
   const activeTab = TABS.find((t) => t.path === location.pathname) ?? TABS[0];
 
@@ -52,26 +55,45 @@ export default function App() {
   }, []);
 
   return (
-    <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <button className="logo" onClick={() => navigate("/")}>
-            🦈 嘟嘟鲨鱼 <span className="logo-sub">DuduShark</span>
+    <div className="app-layout">
+      {/* Sidebar overlay for mobile */}
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
+        <div className="sidebar-top">
+          <button className="sidebar-logo" onClick={() => { navigate("/"); if (window.innerWidth <= 700) setSidebarOpen(false); }}>
+            <span className="sidebar-logo-icon">🦈</span>
+            <span className="sidebar-logo-text">嘟嘟鲨鱼</span>
           </button>
-          <nav className="nav-tabs">
+          <nav className="sidebar-nav">
             {TABS.map((t) => (
               <button
                 key={t.path}
-                className={t.path === activeTab.path ? "active" : ""}
-                onClick={() => navigate(t.path)}
+                className={`sidebar-nav-item${t.path === activeTab.path ? " active" : ""}`}
+                onClick={() => { navigate(t.path); if (window.innerWidth <= 700) setSidebarOpen(false); }}
               >
-                {t.label}
+                <span className="sidebar-nav-icon">{t.icon}</span>
+                <span className="sidebar-nav-label">{t.label}</span>
               </button>
             ))}
           </nav>
-          <div className="topbar-status">{globalStatus}</div>
         </div>
-      </header>
+        <div className="sidebar-footer">
+          <span className={`status-dot ${globalStatus === "已连接" ? "online" : "offline"}`} />
+          <span className="sidebar-status-text">{globalStatus}</span>
+        </div>
+      </aside>
+
+      {/* Hamburger toggle */}
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarOpen((v) => !v)}
+        title={sidebarOpen ? "收起侧边栏" : "展开侧边栏"}
+      >
+        {sidebarOpen ? "✕" : "☰"}
+      </button>
 
       <main className="main-content">
         <Routes>
@@ -101,6 +123,6 @@ export default function App() {
           />
         </Routes>
       </main>
-    </>
+    </div>
   );
 }
