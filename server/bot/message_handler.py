@@ -269,10 +269,10 @@ class MessageHandler:
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
 
         history = self._get_history(user_id, group_id)
-        # 群聊用激进压缩（小 budget），私聊用正常压缩
+        # 群聊用适度压缩，私聊用正常压缩
         ctx = self.ctx
         if is_group:
-            ctx = ContextManager(max_tokens=2500, reserve_for_reply=500)
+            ctx = ContextManager(max_tokens=8000, reserve_for_reply=1500)
         fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
         # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
