@@ -50,7 +50,7 @@ async def _acquire_rate():
 
 
 def _is_retryable(status: int) -> bool:
-    return status in (429, 500, 502, 503, 504)
+    return status in (404, 429, 500, 502, 503, 504)
 
 
 async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
