@@ -120,34 +120,31 @@ class NapCatInstance:
             env["NAPCAT_WRAPPER_PATH"] = wrapper_node
 
     async def start(self) -> bool:
-        """启动 NapCatQQ 实例。"""
-        if not self.napcat_path:
-            logger.error(f"[{self.qq}] 未找到 NapCatQQ，请先安装（运行 ./start.sh）。")
-            return False
-
+        """启动 NapCatQQ 实例。NapCat-Mac-Installer 模式只需重启 QQ。"""
         self.ensure_config()
 
-        # macOS：确保 QQ.app 已启动（NapCatQQ 需要注入到运行中的 QQ 进程）
-        if sys.platform == "darwin":
-            qq_app = "/Applications/QQ.app"
-            if os.path.exists(qq_app):
-                import subprocess as _sp
-                running = _sp.run(["pgrep", "-x", "QQ"], capture_output=True, text=True)
-                if running.returncode != 0:
-                    logger.info(f"[{self.qq}] QQ.app 未运行，正在启动...")
-                    _sp.Popen(["open", qq_app])
-                    await asyncio.sleep(8)  # 等 QQ 完全启动
-                    logger.info(f"[{self.qq}] QQ.app 已启动")
+        # macOS NapCat-Mac-Installer：写配置后重启 QQ 即可加载 NapCat
+        if sys.platform == "darwin" and os.path.exists("/Applications/QQ.app"):
+            subprocess.run(["pkill", "-x", "QQ"], capture_output=True)
+            await asyncio.sleep(2)
+            subprocess.Popen(["/Applications/QQ.app/Contents/MacOS/QQ"])
+            await asyncio.sleep(6)
+            logger.info(f"[{self.qq}] QQ 已重启，NapCat 加载中")
+            self.process = True
+            return True
+
+        # 通用路径：运行 node napcat.mjs
+        if not self.napcat_path:
+            logger.error(f"[{self.qq}] 未找到 NapCatQQ。")
+            return False
 
         napcat_home = self._napcat_home()
         env = os.environ.copy()
-        if sys.platform == "darwin":
-            self._setup_macos_env(env, napcat_home)
 
         try:
             if self.napcat_path.endswith(".mjs"):
                 if not shutil.which("node"):
-                    logger.error(f"[{self.qq}] NapCatQQ v4.x 需要 Node.js，请先安装。")
+                    logger.error(f"[{self.qq}] 需要 Node.js。")
                     return False
                 cmd = ["node", self.napcat_path, "-q", self.qq]
             elif self.napcat_path.endswith(".sh"):
@@ -156,18 +153,12 @@ class NapCatInstance:
                 cmd = [self.napcat_path, "-q", self.qq]
 
             self.process = subprocess.Popen(
-                cmd,
-                env=env,
-                cwd=str(napcat_home),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
+                cmd, env=env, cwd=str(napcat_home),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                 preexec_fn=os.setsid if sys.platform != "win32" else None,
             )
             asyncio.create_task(self._read_output())
             logger.info(f"[{self.qq}] NapCatQQ 已启动 (PID: {self.process.pid})")
-            # 启动后几秒检查是否立即退出（常见于 macOS 沙盒版 QQ）
-            asyncio.create_task(self._check_startup())
             return True
         except Exception as e:
             logger.error(f"[{self.qq}] 启动失败: {e}")
@@ -211,6 +202,8 @@ class NapCatInstance:
 
     @property
     def is_running(self) -> bool:
+        if self.process is True:
+            return True
         return self.process is not None and self.process.poll() is None
 
     async def get_qr_code(self) -> str | None:
