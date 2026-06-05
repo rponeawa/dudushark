@@ -200,9 +200,16 @@ fi
 # ============================================================
 # 6. 启动
 # ============================================================
+PORT="${2:-8080}"
+# 杀掉占用端口的旧进程
+if lsof -ti:"$PORT" &>/dev/null; then
+    info "端口 $PORT 已被占用，清理旧进程..."
+    lsof -ti:"$PORT" | xargs kill -9 2>/dev/null
+    sleep 0.5
+fi
 echo ""
 info "嘟嘟鲨鱼 启动中... 啊呜～"
-echo "  WebUI:  http://127.0.0.1:${2:-8080}"
+echo "  WebUI:  http://127.0.0.1:$PORT"
 echo "  NapCat: $NAPCAT_DIR"
 echo ""
 export DUDUSHARK_DATA="$SCRIPT_DIR/data"
