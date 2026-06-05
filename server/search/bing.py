@@ -31,18 +31,21 @@ async def bing_search(query: str, max_results: int = 5) -> list[dict]:
 
     soup = BeautifulSoup(resp.text, "lxml")
     results = []
-    for li in soup.select("li.b_algo"):
-        a = li.select_one("h2 a")
+    for li in soup.select("li.b_algo, .b_result, article"):
+        a = li.select_one("h2 a, a[href]")
         if not a:
             continue
         title = a.get_text(strip=True)
         url = a.get("href", "")
-        snippet_el = li.select_one(".b_caption p, .b_lineclamp2")
+        snippet_el = li.select_one(".b_caption p, .b_lineclamp2, .b_algoSlug, p")
         snippet = snippet_el.get_text(strip=True) if snippet_el else ""
         if title and url:
             results.append({"title": title, "url": url, "snippet": snippet})
         if len(results) >= max_results:
             break
+    # 如果 Bing 什么都没拿到，尝试 DDG fallback
+    if not results:
+        return await _fallback_search(query, max_results)
     return results
 
 
