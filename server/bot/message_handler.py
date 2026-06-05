@@ -259,8 +259,8 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
-        # 闲聊检测：短消息限制回复长度（群聊也适用）
-        is_casual = len(text) < 20 and "?" not in text and "？" not in text
+        # 闲聊检测：短消息限制回复长度（戳一戳不算闲聊）
+        is_casual = len(text) < 20 and "?" not in text and "？" not in text and "戳" not in text
 
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
         format_hint = (
