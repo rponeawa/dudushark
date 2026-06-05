@@ -198,8 +198,7 @@ class MessageHandler:
         texts = buf["texts"]
         names = buf.get("names", [user_name] * len(texts))
         msg_ids = buf.get("msg_ids", [])
-        if len(texts) > 1:
-            logger.info(f"[merge] {len(texts)}条消息合并: {list(zip(names, texts))}")
+        logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
         # 引用时指向最后一条消息
         last_msg_id = msg_ids[-1] if msg_ids else ""
