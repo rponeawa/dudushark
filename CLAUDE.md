@@ -30,6 +30,7 @@ cd web && npm run build
 PYTHONPATH=. .venv/bin/python tests/test_memory.py
 PYTHONPATH=. .venv/bin/python tests/test_memory_natural.py
 PYTHONPATH=. .venv/bin/python tests/test_merge_group.py
+PYTHONPATH=. .venv/bin/python tests/test_reminders.py
 ```
 
 ## 环境变量
@@ -89,7 +90,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 同一 user_id 的私聊和群聊记忆共享，存储在同一个目录和 ChromaDB collection
 - LLM 通过 JSON `memory`/`diary`/`group_memory`/`forget` 字段自主管理记忆增删改
 - memory 的 `user` 字段 + `names_map` 确保群聊中记忆归属正确用户
-- `__diary__` — 鱼的全局日记，`__group__<id>` — 群聊记忆
+- `__diary__` — 鱼的全局记忆，`__group__<id>` — 群聊记忆
 - 相同 category+title → upsert 更新（看法可随时间改变），不同 → 新建
 - 嵌入失败时返回零向量（非随机向量），并记录 warning 日志
 - ChromaDB collection 名称使用 `strip("_")` 清理，避免 `__diary__` 等非法名称
@@ -128,15 +129,30 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - `msg[0]` 永远不变 → prefix cache 命中率 100%
 - 记忆日期格式化为易读的 `MM-DD HH:MM` 而非 ISO 8601
 
-**JSON 格式指令（群聊）：**
+**定时提醒系统：**
+- LLM 通过 JSON `remind` 字段创建一次性定时任务：`{"at_utc": Unix时间戳, "content": "提醒内容"}`
+- 存储到 `data/instances/{qq}/reminders.json`，调度器每周期检查
+- 到点通过 OneBot 发送消息，发送后自动删除，不重复
+
+**隐私保护：**
+- `admins_description` 仅在发送者本人是管理员时注入 system prompt
+- 家族记忆（`family_memory` + `family_note`）仅对 role 含特定标识的成员在私聊中注入
+- 群聊中不注入个人记忆和家族记忆，日记内容禁止透露具体人名
+- Persona 含隐私铁律：绝对不泄露他人记忆、私聊内容或个人信息
+- 记忆日期格式化为易读的 `MM-DD HH:MM` 而非 ISO 8601
+
+**JSON 格式指令：**
 - memory: `{"user":"名字","category":"类别","title":"标题","content":"内容"}` — user 字段指定归属
-- group_memory: `{"category":"类别","title":"标题","content":"内容"}` — 群整体信息
+- group_memory: `{"category":"类别","title":"标题","content":"内容"}` — 群整体信息（仅群聊）
 - diary: 同 memory 格式，值得写才写
 - forget: `{"category":"类别","title":"标题"}` — 删除记忆
+- remind: `{"at_utc": Unix时间戳, "content": "提醒内容"}` — 一次性定时提醒
+- say+search: `{"say":"...","search":"..."}` — 多步搜索
 
 **角色/管理员系统：**
-- `BotConfig.admins` 列表：`[{"qq":"3151109741","role":"妈妈"}]`
-- 注入 system prompt 让鱼识别特殊身份（自然表达对应关系）
+- `BotConfig.admins` 列表，通过 `admins_description` 注入 system prompt 让鱼识别特殊身份
+- 运行时根据 QQ 号匹配，用户名后标注【角色】标签，无法伪造
+- 管理员描述和家族记忆仅对本人私聊时注入，防止信息泄露
 - 前端 Settings 页面可管理
 
 **其他关键规则：**
