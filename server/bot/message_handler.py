@@ -239,12 +239,14 @@ class MessageHandler:
 
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
         messages.append({"role": "system", "content": (
-            "你必须输出一个JSON对象，不要任何其他内容。格式：\n"
-            '{"reply": "回复文本", "quote": false, "memory": null}\n\n'
-            "- reply: 你的回复。不说话时填 \"[SKIP]\"\n"
-            "- quote: 是否引用回复，true/false\n"
-            "- memory: 用户消息中值得长期记住的重要信息。不是鸡毛蒜皮的小事，而是名字、职业、喜好、经历等重要事实。没有就填 null。有的话填 {\"category\": \"类别\", \"title\": \"简短标题\", \"content\": \"一句话概括\"}\n"
-            "类别用：个人信息、兴趣爱好、职业、重要事件、备注"
+            "你必须输出一个JSON对象，不要任何其他内容。\n"
+            "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
+            "需要先想/查一下（多步）：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
+            "- reply: 最终回复。不说话填\"[SKIP]\"。如果有say就不要填reply\n"
+            "- say: 可选的，在查东西之前先说的一句话（简短）\n"
+            "- search: 可选的，需要查的关键词。没有就不填\n"
+            "- quote: 是否引用回复\n"
+            "- memory: 重要信息才记，不重要就null\n"
         )})
 
         prefix = "[群聊]" if is_group else ""
@@ -252,20 +254,7 @@ class MessageHandler:
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
 
-        # 网络搜索
-        if self.cfg.web_search_enabled and needs_search(text):
-            try:
-                results = await bing_search(text)
-                if results:
-                    search_context = (
-                        "\n\n## 网络搜索结果（鱼偷偷去查的，不要直接贴搜索结果哦，自然地用鱼的语气说出来）：\n"
-                        + format_search_results(results)
-                    )
-                    messages.append({"role": "system", "content": search_context})
-            except Exception:
-                pass
-
-        # 调用 LLM（带重试）
+        # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
         payload = {
             "model": llm.model,
@@ -280,49 +269,138 @@ class MessageHandler:
             logger.error(f"LLM 调用最终失败: {e}")
             return []
 
-        # 解析 JSON 回复（去掉可能的 markdown 代码围栏，带纯文本兜底）
-        json_text = full_reply.strip()
-        if json_text.startswith("```"):
-            json_text = json_text.split("\n", 1)[-1] if "\n" in json_text else json_text[3:]
-            if json_text.endswith("```"):
-                json_text = json_text[:-3]
-            json_text = json_text.strip()
-        reply_text = full_reply
+        # 解析 JSON（去掉 markdown 围栏）
+        def _parse_json(raw: str) -> dict | None:
+            t = raw.strip()
+            if t.startswith("```"):
+                t = t.split("\n", 1)[-1] if "\n" in t else t[3:]
+                if t.endswith("```"):
+                    t = t[:-3]
+                t = t.strip()
+            try:
+                d = json.loads(t)
+                return d if isinstance(d, dict) else None
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+        data = _parse_json(full_reply)
+
+        # 处理 memory
+        def _save_memory(mem, uid):
+            if not mem or not isinstance(mem, dict):
+                return
+            action = mem.get("action", "save")
+            cat = str(mem.get("category", "")).strip()
+            title = str(mem.get("title", "")).strip()
+            if not cat or not title:
+                return
+            try:
+                if action == "delete":
+                    self.memory.forget(uid, cat, title)
+                else:
+                    content = str(mem.get("content", "")).strip()
+                    if content:
+                        self.memory.remember(uid, cat, title, content)
+            except Exception:
+                pass
+
+        # ---- 多步：say + search → 先返回思考消息，后台异步查+回复 ----
+        if data and data.get("say") and not data.get("reply"):
+            say_text = data.get("say", "")
+            want_quote = data.get("quote", False)
+            search_query = data.get("search", "")
+            say_parts = self._split_reply(say_text) if say_text else []
+
+            for part in say_parts:
+                self._append_history(user_id, "assistant", part, group_id)
+
+            # 后台任务：真正执行搜索 → LLM → 发送结果
+            async def _followup():
+                conv_key = self._conv_key(user_id, group_id)
+                final_data = {}
+                if search_query and self.cfg.web_search_enabled:
+                    try:
+                        results = await bing_search(str(search_query))
+                        if results:
+                            ctx = ("## 网络搜索结果\n" + format_search_results(results)
+                                   + "\n\n用鱼自己的话把结果讲出来，绝对不能直接贴搜索结果的格式或文字。然后给出最终回复的JSON（包含reply和memory字段）。")
+                            fu_msgs = list(messages)
+                            fu_msgs.append({"role": "system", "content": ctx})
+                            fu_payload = {
+                                "model": llm.model, "messages": fu_msgs,
+                                "temperature": mood.llm_temperature(0.85),
+                                "max_tokens": mood.llm_max_tokens(1024),
+                            }
+                            raw2 = await _call_llm(llm.base_url, llm.api_key, fu_payload, timeout=45)
+                            final_data = _parse_json(raw2) or {}
+                    except Exception:
+                        pass
+
+                reply_txt = final_data.get("reply", "") if final_data else ""
+                if not reply_txt or reply_txt.strip() == "[SKIP]":
+                    return
+                q = final_data.get("quote", False)
+                _save_memory(final_data.get("memory"), user_id)
+
+                client = None
+                from server.bot.onebot_handler import onebot_server
+                client = onebot_server.get_client(self.bot_qq)
+                if not client or not client.connected:
+                    return
+                is_g = bool(group_id)
+                target = group_id if is_g else user_id
+                for pi, part in enumerate(self._split_reply(reply_txt)):
+                    try:
+                        qid = quote_msg_id if (q and pi == 0 and quote_msg_id) else None
+                        if qid:
+                            if is_g:
+                                await client.send_group_msg_quote(target, part, qid)
+                            else:
+                                await client.send_private_msg_quote(user_id, part, qid)
+                        else:
+                            if is_g:
+                                await client.send_group_msg(target, part)
+                            else:
+                                await client.send_private_msg(user_id, part)
+                        if pi < len(self._split_reply(reply_txt)) - 1:
+                            typing_delay = max(1.0, len(part) * 0.05 + 0.5)
+                            await asyncio.sleep(typing_delay)
+                    except Exception:
+                        pass
+                    self._append_history(user_id, "assistant", part, group_id)
+
+            asyncio.create_task(_followup())
+
+            result = []
+            for i, part in enumerate(say_parts):
+                qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
+                result.append(ReplyPart(part, qid))
+            return result
+
+        # ---- 简单回复 ----
+        reply_text = ""
         want_quote = False
-        memory_info = None
-        try:
-            data = json.loads(json_text)
-            if isinstance(data, dict):
-                reply_text = data.get("reply", full_reply)
-                want_quote = data.get("quote", False)
-                memory_info = data.get("memory")
-        except (json.JSONDecodeError, TypeError):
-            # 纯文本兜底：保留旧的 >> 引用检测
+        if data:
+            reply_text = data.get("reply", "")
+            want_quote = data.get("quote", False)
+            _save_memory(data.get("memory"), user_id)
+            forget_info = data.get("forget")
+            if forget_info and isinstance(forget_info, dict):
+                _save_memory({**forget_info, "action": "delete"}, user_id)
+        else:
+            reply_text = full_reply
             if reply_text.startswith(">>"):
                 want_quote = True
                 reply_text = reply_text[2:].strip()
 
-        if reply_text.strip() == "[SKIP]":
+        if not reply_text or reply_text.strip() == "[SKIP]":
             return []
 
-        # 存储记忆（如果有）
-        if memory_info and isinstance(memory_info, dict):
-            cat = str(memory_info.get("category", "")).strip()
-            title = str(memory_info.get("title", "")).strip()
-            content = str(memory_info.get("content", "")).strip()
-            if cat and title and content:
-                try:
-                    self.memory.remember(user_id, cat, title, content)
-                except Exception:
-                    pass
-
-        parts = self._split_reply(reply_text)
         result = []
-        for i, part in enumerate(parts):
+        for i, part in enumerate(self._split_reply(reply_text)):
             qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
             result.append(ReplyPart(part, qid))
             self._append_history(user_id, "assistant", part, group_id)
-
         return result
 
     def reload_config(self):
