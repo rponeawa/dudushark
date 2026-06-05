@@ -367,12 +367,12 @@ class MessageHandler:
             "{\"reply\":\"...\",\"quote\":false,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
-            "- memory: 值得记住的关于某个人的事，没有就null。格式: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。user填那个人在消息里的名字，分不清就不填。相同类别+标题会更新旧记忆"
+            "- memory: 关于某人的重要信息，null居多。日常寒暄、夸两句、道晚安这类不记。格式: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。user填消息里的名字。相同类别+标题会更新"
         )
         if is_group:
             json_prompt += "\n- group_memory: 关于这个群整体的事（非个人），null居多。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}"
         json_prompt += (
-            "\n- diary: 你自己的全局记忆，值得写的时候才写，null居多。格式同memory\n"
+            "\n- diary: 你自己的全局记忆，值得写才写。日常寒暄、道晚安、夸两句这类不记，null居多。格式同memory\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
