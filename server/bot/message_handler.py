@@ -438,9 +438,13 @@ class MessageHandler:
         if not reply_text or reply_text.strip() == "[SKIP]":
             return []
 
-        # JSON 解析失败时，异步提取记忆（兜底）
+        # JSON 解析失败时，异步提取记忆（兜底），短超时不影响回复
         if not data and reply_text and len(reply_text) > 10:
-            asyncio.create_task(self._fallback_memory(user_id, user_name, text, reply_text))
+            try:
+                await asyncio.wait_for(
+                    self._fallback_memory(user_id, user_name, text, reply_text), timeout=10)
+            except Exception:
+                pass
 
         result = []
         for i, part in enumerate(self._split_reply(reply_text)):
