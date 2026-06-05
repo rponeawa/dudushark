@@ -127,8 +127,8 @@ class OneBotClient:
                     asyncio.create_task(self._on_message(
                         bot_qq=self.bot_qq,
                         user_id=user_id,
-                        user_name="",
-                        text="[戳一戳]",
+                        user_name=data.get("sender", {}).get("nickname", "") or f"QQ{user_id}",
+                        text="刚刚戳了戳鱼",
                         group_id=group_id,
                         msg_type="group",
                         message_id="",
