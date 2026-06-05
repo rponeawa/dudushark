@@ -383,6 +383,7 @@ class MessageHandler:
                 if search_query and self.cfg.web_search_enabled:
                     try:
                         results = await bing_search(str(search_query))
+                        logger.info(f"[multi-step] search done: {len(results) if results else 0} results")
                         if results:
                             ctx = ("## 网络搜索结果\n" + format_search_results(results)
                                    + "\n\n用鱼自己的话把结果讲出来，绝对不能直接贴搜索结果的格式或文字。然后给出最终回复的JSON（包含reply和memory字段）。")
