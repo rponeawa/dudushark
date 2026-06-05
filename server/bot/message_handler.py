@@ -252,14 +252,6 @@ class MessageHandler:
 
         messages = [{"role": "system", "content": PERSONA_SYSTEM_PROMPT}]
 
-        # 注入管理员/特殊角色信息（仅作背景参考，鱼自行决定如何回应）
-        admins = self.cfg.admins
-        if admins:
-            lines = ["你知道以下QQ号的特殊身份（只在你觉得自然的时候流露，不用刻意）："]
-            for a in admins:
-                lines.append(f"- {a.get('qq', '?')} 是 {a.get('role', '?')}")
-            messages.append({"role": "system", "content": "\n".join(lines)})
-
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
 
@@ -288,7 +280,14 @@ class MessageHandler:
         )})
 
         prefix = "[群聊]" if is_group else ""
-        user_msg = {"role": "user", "content": f"{prefix}{user_name} 说: {text}"}
+        # 管理员/特殊角色：在名字后面加标签，让鱼自然感知身份
+        role_tag = ""
+        for a in self.cfg.admins:
+            if str(a.get("qq", "")) == user_id:
+                role_tag = f"【{a.get('role', '?')}】"
+                break
+        display_name = f"{user_name}{role_tag}"
+        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
 
