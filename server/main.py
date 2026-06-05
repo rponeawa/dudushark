@@ -11,15 +11,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, Request, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.bot.onebot_handler import onebot_server
 from server.bot.message_handler import get_message_handler
 from server.bot.mood import remove_mood
 from server.bot.proactive import start_scheduler, stop_scheduler
-from server.config import DATA_DIR
-from server.webui.routes import router as webui_router, push_event
+from server.config import DATA_DIR, AUTH_ENABLED, WEBUI_PASSWORD
+from server.webui.routes import router as webui_router, push_event, _verify_token
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +44,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="嘟嘟鲨鱼 DuduShark", version="1.0.0", lifespan=lifespan)
 app.include_router(webui_router)
+
+# Auth middleware — protects /api/* except login and websocket
+_AUTH_WHITELIST = {"/api/auth/login", "/api/ws/widget"}
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if AUTH_ENABLED and request.url.path.startswith("/api/") and request.url.path not in _AUTH_WHITELIST:
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token or not _verify_token(token):
+            return JSONResponse({"detail": "需要登录"}, status_code=401)
+    return await call_next(request)
 
 # 静态资源
 if STATIC_DIR.exists():

@@ -5,17 +5,59 @@ import Instances from "./pages/Instances";
 import Conversations from "./pages/Conversations";
 import Memories from "./pages/Memories";
 import Settings from "./pages/Settings";
-import { listInstances, InstanceInfo } from "./api";
+import { listInstances, InstanceInfo, login, setToken, getToken } from "./api";
 
 type Tab = { label: string; path: string; icon: string };
 
 const TABS: Tab[] = [
   { label: "状态", path: "/", icon: "monitoring" },
-  { label: "实例管理", path: "/instances", icon: "dns" },
+  { label: "实例", path: "/instances", icon: "dns" },
   { label: "对话", path: "/conversations", icon: "chat" },
   { label: "记忆", path: "/memories", icon: "psychology" },
-  { label: "模型设置", path: "/settings", icon: "settings" },
+  { label: "设置", path: "/settings", icon: "settings" },
 ];
+
+function LoginPage({ onLogin }: { onLogin: () => void }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pw) return;
+    setLoading(true);
+    setErr("");
+    try {
+      const res = await login(pw);
+      setToken(res.token || "ok");
+      onLogin();
+    } catch {
+      setErr("密码错误");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-page">
+      <form className="auth-card" onSubmit={handle}>
+        <div className="auth-icon">🦈</div>
+        <h1>嘟嘟鲨鱼</h1>
+        <p className="auth-sub">DuduShark WebUI</p>
+        <input
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="请输入面板密码"
+          autoFocus
+        />
+        <button className="btn-primary" type="submit" disabled={loading}>
+          {loading ? "验证中..." : "登录"}
+        </button>
+        {err && <div className="auth-error">{err}</div>}
+      </form>
+    </div>
+  );
+}
 
 export default function App() {
   const navigate = useNavigate();
@@ -23,9 +65,8 @@ export default function App() {
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [activeQQ, setActiveQQ] = useState<string>("");
   const [globalStatus, setGlobalStatus] = useState("未连接");
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => window.innerWidth > 700
-  );
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 700);
+  const [authed, setAuthed] = useState(() => !!getToken());
 
   const activeTab = TABS.find((t) => t.path === location.pathname) ?? TABS[0];
 
@@ -39,24 +80,38 @@ export default function App() {
       });
       const anyConnected = data.instances.some((i) => i.connected);
       setGlobalStatus(anyConnected ? "已连接" : "未连接");
-    } catch { /* server not ready */ }
+    } catch (e: unknown) {
+      if ((e as Error).message === "unauthorized") {
+        setAuthed(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
+    if (!authed) return;
     refreshInstances();
     const timer = setInterval(refreshInstances, 5000);
     return () => clearInterval(timer);
-  }, [refreshInstances]);
+  }, [refreshInstances, authed]);
 
   useEffect(() => {
+    if (!authed) return;
     const ws = new WebSocket(`ws://${window.location.hostname}:8080/api/ws/widget`);
     ws.onmessage = () => refreshInstances();
     return () => ws.close();
-  }, []);
+  }, [refreshInstances, authed]);
+
+  const handleLogout = () => {
+    setToken(null);
+    setAuthed(false);
+  };
+
+  const handleLogin = () => setAuthed(true);
+
+  if (!authed) return <LoginPage onLogin={handleLogin} />;
 
   return (
     <div className="app-layout">
-      {/* Sidebar overlay for mobile */}
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
@@ -81,12 +136,14 @@ export default function App() {
           </nav>
         </div>
         <div className="sidebar-footer">
-          <span className={`status-dot ${globalStatus === "已连接" ? "online" : "offline"}`} />
-          <span className="sidebar-status-text">{globalStatus}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className={`status-dot ${globalStatus === "已连接" ? "online" : "offline"}`} />
+            <span className="sidebar-status-text">{globalStatus}</span>
+          </div>
+          <button className="sidebar-logout" onClick={handleLogout}>退出登录</button>
         </div>
       </aside>
 
-      {/* Hamburger toggle */}
       <button
         className="sidebar-toggle"
         onClick={() => setSidebarOpen((v) => !v)}

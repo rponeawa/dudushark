@@ -2,6 +2,9 @@
 Web UI API 路由。
 """
 
+import hashlib
+import hmac
+import json
 import logging
 import os
 import sys
@@ -16,6 +19,8 @@ from pydantic import BaseModel
 
 from server.config import (
     DATA_DIR,
+    WEBUI_PASSWORD,
+    AUTH_ENABLED,
     load_global_config,
     save_global_config,
     get_instance_config,
@@ -30,6 +35,56 @@ from server.napcat.manager import napcat_manager
 
 logger = logging.getLogger("dudushark.webui")
 router = APIRouter(prefix="/api")
+
+TOKEN_SECRET = WEBUI_PASSWORD + "_dudushark_token_salt" if WEBUI_PASSWORD else ""
+TOKEN_TTL = 86400 * 7  # 7 天
+
+
+def _make_token() -> str:
+    expires = int(time.time()) + TOKEN_TTL
+    payload = f"dudushark:{expires}"
+    sig = hmac.new(TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    token = f"{payload}:{sig}"
+    return _b64(token)
+
+
+def _verify_token(token: str) -> bool:
+    try:
+        raw = _unb64(token)
+        parts = raw.split(":")
+        if len(parts) != 3 or parts[0] != "dudushark":
+            return False
+        expires = int(parts[1])
+        if time.time() > expires:
+            return False
+        payload = f"dudushark:{expires}"
+        expected = hmac.new(TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+        return hmac.compare_digest(parts[2], expected)
+    except Exception:
+        return False
+
+
+def _b64(s: str) -> str:
+    import base64
+    return base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+
+
+def _unb64(s: str) -> str:
+    import base64
+    padding = 4 - len(s) % 4
+    if padding != 4:
+        s += "=" * padding
+    return base64.urlsafe_b64decode(s).decode()
+
+
+@router.post("/auth/login")
+async def login(body: dict):
+    pw = body.get("password", "") if body else ""
+    if AUTH_ENABLED and pw == WEBUI_PASSWORD:
+        return {"token": _make_token()}
+    if not AUTH_ENABLED:
+        return {"token": ""}
+    raise HTTPException(401, "密码错误")
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_HTML = STATIC_DIR / "index.html"

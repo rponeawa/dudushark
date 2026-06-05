@@ -43,7 +43,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
   };
 
   if (instances.length === 0) {
-    return <div className="empty-state">请先在「实例管理」中创建并启动一个实例～</div>;
+    return <div className="empty-state">请先在「实例」页面创建并启动一个实例</div>;
   }
 
   if (!cfg) {
@@ -56,7 +56,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
 
       <div className="panel">
         <div className="panel-header">
-          <h2>选择实例</h2>
+          <h2>实例选择</h2>
         </div>
         <div className="form-group" style={{ maxWidth: 300 }}>
           <select value={activeQQ} onChange={(e) => setActiveQQ(e.target.value)}>
@@ -70,7 +70,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
       <div className="panel">
         <div className="settings-form">
           <div className="section">
-            <div className="section-title">LLM 模型配置</div>
+            <div className="section-title">LLM 模型</div>
             <div className="form-group">
               <label>Base URL</label>
               <input
@@ -130,16 +130,14 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                   onChange={(e) => setCfg({ ...cfg, reply_split_enabled: e.target.checked })}
                   style={{ width: "auto" }}
                 />
-                长回复自动拆分发送
+                长回复自动拆分
               </label>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label>最多拆分条数</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={10}
+                  type="number" min={1} max={10}
                   value={cfg.reply_split_max}
                   onChange={(e) => setCfg({ ...cfg, reply_split_max: Number(e.target.value) })}
                 />
@@ -147,10 +145,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
               <div className="form-group">
                 <label>私聊合并等待 (秒)</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  step={0.5}
+                  type="number" min={1} max={10} step={0.5}
                   value={cfg.private_merge_delay}
                   onChange={(e) => setCfg({ ...cfg, private_merge_delay: Number(e.target.value) })}
                 />
@@ -158,10 +153,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
               <div className="form-group">
                 <label>群聊合并等待 (秒)</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  step={0.5}
+                  type="number" min={1} max={10} step={0.5}
                   value={cfg.group_merge_delay}
                   onChange={(e) => setCfg({ ...cfg, group_merge_delay: Number(e.target.value) })}
                 />
@@ -179,16 +171,16 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                   onChange={(e) => setCfg({ ...cfg, web_search_enabled: e.target.checked })}
                   style={{ width: "auto" }}
                 />
-                启用网络搜索（必应）
+                网络搜索
               </label>
             </div>
           </div>
 
           <div className="section">
-            <div className="section-title">连接端口</div>
+            <div className="section-title">端口</div>
             <div className="form-row">
               <div className="form-group">
-                <label>OneBot WebSocket 端口</label>
+                <label>OneBot WebSocket</label>
                 <input
                   type="number"
                   value={cfg.onebot_ws_port}
@@ -196,7 +188,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                 />
               </div>
               <div className="form-group">
-                <label>NapCat WebUI 端口</label>
+                <label>NapCat WebUI</label>
                 <input
                   type="number"
                   value={cfg.napcat_webui_port}
@@ -207,7 +199,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
           </div>
 
           <div className="section">
-            <div className="section-title">管理员 / 特殊角色</div>
+            <div className="section-title">管理员</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(cfg.admins || []).map((a: Record<string, string>, i: number) => (
                 <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -222,7 +214,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                     }}
                   />
                   <input
-                    placeholder="角色（如：妈妈）"
+                    placeholder="角色"
                     value={a.role || ""}
                     style={{ flex: 1 }}
                     onChange={(e) => {
@@ -238,12 +230,12 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
               ))}
               <button className="btn-ghost btn-sm" onClick={() => {
                 setCfg({ ...cfg, admins: [...(cfg.admins || []), { qq: "", role: "" }] });
-              }}>+ 添加</button>
+              }}>添加</button>
             </div>
           </div>
 
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "保存中..." : "保存设置"}
+            {saving ? "保存中..." : "保存"}
           </button>
         </div>
       </div>

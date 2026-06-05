@@ -23,7 +23,7 @@ const SLEEP_LABELS: Record<string, string> = {
 };
 
 const SLEEP_ICON: Record<string, string> = {
-  awake: "",
+  awake: "routine",
   sleepy: "bedtime",
   just_woke: "visibility",
   night_owl: "dark_mode",
@@ -38,42 +38,27 @@ function MoodCard({ mood }: { mood: MoodState }) {
   else if (mood.energy > 0.7) energyColor = "var(--accent)";
 
   return (
-    <div style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border)",
-      borderRadius: "var(--radius)",
-      padding: "10px 14px",
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-    }}>
-      {SLEEP_ICON[mood.sleep_state] ? (
-        <span className="material-symbols-outlined" style={{ fontSize: "1.4rem" }}>
-          {SLEEP_ICON[mood.sleep_state]}
-        </span>
-      ) : null}
+    <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <span className="material-symbols-outlined" style={{ fontSize: "1.4rem", color: "var(--text-dim)" }}>
+        {SLEEP_ICON[mood.sleep_state]}
+      </span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 2 }}>
+        <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>
           {SLEEP_LABELS[mood.sleep_state] || mood.sleep_state}
-          {energyPct > 75 ? " · 精力充沛" : energyPct < 20 ? " · 好困" : ""}
         </div>
         <div style={{
-          height: 6,
-          background: "var(--bg-hover)",
-          borderRadius: 3,
-          overflow: "hidden",
+          height: 5, background: "var(--bg-hover)", borderRadius: 3,
+          overflow: "hidden", marginTop: 4,
         }}>
           <div style={{
-            height: "100%",
-            width: `${energyPct}%`,
-            background: energyColor,
-            borderRadius: 3,
+            height: "100%", width: `${energyPct}%`,
+            background: energyColor, borderRadius: 3,
             transition: "width 0.5s",
           }} />
         </div>
       </div>
       <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-        精力 {energyPct}%
+        {energyPct}%
       </span>
     </div>
   );
@@ -123,17 +108,37 @@ export default function Status() {
       <div className="panel">
         <div className="panel-header">
           <h2>系统状态</h2>
-          <span className="text-dim" style={{ fontSize: "0.82rem" }}>
-            运行时间: {status ? fmtUptime(status.uptime) : "-"}
+          <span style={{ fontSize: "0.82rem", color: "var(--text-dim)" }}>
+            运行 {status ? fmtUptime(status.uptime) : "-"}
           </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
-          <StatusCard label="LLM 连接" value={status?.llm_ok ? "正常" : "异常"} ok={status?.llm_ok} />
-          <StatusCard label="实例数" value={String(status?.instances.length ?? 0)} />
-          <StatusCard label="活跃对话" value={String(status?.total_conversations ?? 0)} />
-          <StatusCard label="记忆总数" value={String(status?.total_memories ?? 0)} />
-          <StatusCard label="内存占用" value={`${status?.memory_mb ?? 0} MB`} />
-          <StatusCard label="平台" value={status?.platform ?? "-"} />
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-label">LLM 连接</div>
+            <div className="stat-value" style={{ color: status?.llm_ok ? "var(--green)" : "var(--red)" }}>
+              {status?.llm_ok ? "正常" : "异常"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">实例数</div>
+            <div className="stat-value">{status?.instances.length ?? 0}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">活跃对话</div>
+            <div className="stat-value">{status?.total_conversations ?? 0}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">记忆总数</div>
+            <div className="stat-value">{status?.total_memories ?? 0}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">内存占用</div>
+            <div className="stat-value">{status?.memory_mb ?? 0} MB</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">平台</div>
+            <div className="stat-value">{status?.platform ?? "-"}</div>
+          </div>
         </div>
       </div>
 
@@ -141,7 +146,7 @@ export default function Status() {
       {status?.instances && status.instances.length > 0 && (
         <div className="panel">
           <div className="panel-header">
-            <h2>实例状态</h2>
+            <h2>实例</h2>
           </div>
           <div className="instance-grid">
             {status.instances.map((inst) => (
@@ -153,14 +158,14 @@ export default function Status() {
                 <h3>{inst.qq}</h3>
                 <div className="status-line">
                   <span className={`status-dot ${inst.connected ? "online" : "offline"}`} />
-                  OneBot: {inst.connected ? "已连接" : "未连接"}
+                  OneBot {inst.connected ? "已连接" : "未连接"}
                 </div>
                 <div className="status-line">
                   <span className={`status-dot ${inst.napcat_running ? "online" : "offline"}`} />
-                  NapCat: {inst.napcat_running ? "运行中" : "未运行"}
+                  NapCat {inst.napcat_running ? "运行中" : "未运行"}
                 </div>
-                <div className="status-line text-dim" style={{ marginTop: 4 }}>
-                  对话 {inst.conversation_count} · 用户 {inst.memory_users}
+                <div className="status-line" style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginTop: 6 }}>
+                  对话 {inst.conversation_count} 用户 {inst.memory_users}
                 </div>
               </div>
             ))}
@@ -170,9 +175,7 @@ export default function Status() {
 
       {status?.instances.length === 0 && (
         <div className="panel">
-          <div className="empty-state">
-            还没有实例 —— 去「实例管理」添加一个吧～
-          </div>
+          <div className="empty-state">还没有实例，去「实例」页面添加一个吧</div>
         </div>
       )}
 
@@ -180,7 +183,7 @@ export default function Status() {
       {detail && (
         <div className="panel">
           <div className="panel-header">
-            <h2>实例 {detail.qq} 详情</h2>
+            <h2>实例 {detail.qq}</h2>
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -189,41 +192,41 @@ export default function Status() {
               {detail.connected ? "已连接" : "未连接"}
             </div>
             <div className="form-group">
-              <label>NapCat 状态</label>
+              <label>NapCat</label>
               <span className={`status-dot ${detail.napcat_running ? "online" : "offline"}`} />
               {detail.napcat_running ? "运行中" : "未运行"}
             </div>
             <div className="form-group">
               <label>NapCat WebUI</label>
-              <span className="text-mono">http://127.0.0.1:{detail.napcat_webui_port}/webui/</span>
+              <span className="text-mono">127.0.0.1:{detail.napcat_webui_port}</span>
             </div>
           </div>
           {detail.mood && (
             <div className="form-group" style={{ marginBottom: 12 }}>
-              <label>心情状态</label>
+              <label>心情</label>
               <MoodCard mood={detail.mood} />
             </div>
           )}
           <div className="form-row">
             <div className="form-group">
-              <label>活跃对话数</label>
+              <label>活跃对话</label>
               <span>{detail.conversation_count}</span>
             </div>
             <div className="form-group">
-              <label>记忆用户数</label>
+              <label>记忆用户</label>
               <span>{detail.memory_users.length}</span>
             </div>
             <div className="form-group">
-              <label>记忆条目总数</label>
+              <label>记忆条目</label>
               <span>{detail.total_memories}</span>
             </div>
           </div>
           {detail.memory_users.length > 0 && (
             <div className="form-group">
               <label>各用户记忆数</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                 {Object.entries(detail.memory_stats).map(([uid, count]) => (
-                  <span key={uid} className="mem-cat" style={{ fontSize: "0.78rem" }}>
+                  <span key={uid} className="mem-cat">
                     {uid}: {count}
                   </span>
                 ))}
@@ -242,19 +245,14 @@ export default function Status() {
           <div style={{ maxHeight: 300, overflowY: "auto" }}>
             {[...status.recent_events].reverse().map((evt, i) => (
               <div key={i} style={{
-                padding: "6px 0",
-                borderBottom: "1px solid var(--border)",
-                fontSize: "0.82rem",
-                display: "flex",
-                gap: 10,
+                padding: "6px 0", borderBottom: "1px solid var(--border)",
+                fontSize: "0.82rem", display: "flex", gap: 10,
               }}>
-                <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "0.76rem" }}>
                   {fmtTime(evt._ts as number)}
                 </span>
                 <span style={{
-                  padding: "1px 6px",
-                  borderRadius: 3,
-                  fontSize: "0.72rem",
+                  padding: "1px 6px", borderRadius: 3, fontSize: "0.7rem",
                   background: evt.type === "message" ? "var(--accent-dim)" : "var(--bg-hover)",
                   color: evt.type === "message" ? "var(--accent)" : "var(--text-dim)",
                   whiteSpace: "nowrap",
@@ -269,26 +267,6 @@ export default function Status() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function StatusCard({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
-  return (
-    <div style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border)",
-      borderRadius: "var(--radius)",
-      padding: "12px 14px",
-    }}>
-      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
-      <div style={{
-        fontSize: "1.05rem",
-        fontWeight: 600,
-        color: ok === false ? "var(--red)" : ok === true ? "var(--green)" : "var(--text-bright)",
-      }}>
-        {value}
-      </div>
     </div>
   );
 }

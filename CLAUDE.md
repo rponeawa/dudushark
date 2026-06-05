@@ -33,6 +33,7 @@ cd web && npm run build
 |------|------|
 | `STEPFUN_API_KEY` | 阶跃星辰 LLM API Key |
 | `SILICONFLOW_API_KEY` | SiliconFlow 嵌入 API Key (BAAI/bge-m3) |
+| `WEBUI_PASSWORD` | WebUI 面板登录密码（不设置则跳过鉴权） |
 | `DUDUSHARK_DATA` | 数据目录，默认 `./data` |
 
 ## 架构

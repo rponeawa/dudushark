@@ -1,13 +1,29 @@
 const BASE = "/api";
 
+let _token: string | null = localStorage.getItem("dudushark_token");
+
+export function getToken() { return _token; }
+
+export function setToken(t: string | null) {
+  _token = t;
+  if (t) localStorage.setItem("dudushark_token", t);
+  else localStorage.removeItem("dudushark_token");
+}
+
 async function req<T>(url: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + url, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (_token) headers["Authorization"] = `Bearer ${_token}`;
+  const res = await fetch(BASE + url, { headers, ...opts });
+  if (res.status === 401) {
+    setToken(null);
+    throw new Error("unauthorized");
+  }
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
+
+export const login = (password: string) =>
+  req<{ token: string }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) });
 
 export interface InstanceInfo {
   qq: string;

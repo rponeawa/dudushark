@@ -17,6 +17,25 @@ interface Props {
   setActiveQQ: (qq: string) => void;
 }
 
+type MemoryTab = "personal" | "group" | "diary";
+
+function classifyUsers(users: string[]) {
+  const personal: string[] = [];
+  const groups: string[] = [];
+  let diary: string | null = null;
+  for (const u of users) {
+    if (u === "__diary__") diary = u;
+    else if (u.startsWith("__group__")) groups.push(u);
+    else personal.push(u);
+  }
+  return { personal, groups, diary };
+}
+
+function groupIdLabel(key: string) {
+  if (key.startsWith("__group__")) return key.slice("__group__".length);
+  return key;
+}
+
 export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
   const [users, setUsers] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
@@ -24,11 +43,14 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
   const [searchResults, setSearchResults] = useState<MemorySearchResult[]>([]);
   const [searchQ, setSearchQ] = useState("");
   const [viewMode, setViewMode] = useState<"all" | "search">("all");
+  const [tab, setTab] = useState<MemoryTab>("personal");
 
   // Create form
   const [newCat, setNewCat] = useState("日常");
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
+
+  const classified = classifyUsers(users);
 
   useEffect(() => {
     if (!activeQQ) return;
@@ -39,6 +61,20 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
     setMemories([]);
     setSearchResults([]);
   }, [activeQQ]);
+
+  useEffect(() => {
+    // Auto-select first user in current tab
+    const list = tab === "personal" ? classified.personal
+      : tab === "group" ? classified.groups
+      : classified.diary ? [classified.diary] : [];
+    if (list.length > 0) {
+      setSelectedUser(list[0]);
+      loadMemories(list[0]);
+    } else {
+      setSelectedUser("");
+      setMemories([]);
+    }
+  }, [tab, users]);
 
   const loadMemories = async (userId: string) => {
     setSelectedUser(userId);
@@ -92,15 +128,19 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
   };
 
   if (instances.length === 0) {
-    return <div className="empty-state">请先在「实例管理」中创建并启动一个实例～</div>;
+    return <div className="empty-state">请先在「实例」页面创建并启动一个实例</div>;
   }
 
+  const userList = tab === "personal" ? classified.personal
+    : tab === "group" ? classified.groups
+    : classified.diary ? [classified.diary] : [];
+
   return (
-    <div className="two-col" style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "12px", alignItems: "start" }}>
+    <div className="two-col">
       {/* Sidebar */}
-      <div className="panel" style={{ position: "sticky", top: 60 }}>
+      <div className="panel two-col-side">
         <div className="form-group">
-          <label>选择实例</label>
+          <label>实例</label>
           <select value={activeQQ} onChange={(e) => setActiveQQ(e.target.value)}>
             {instances.map((i) => (
               <option key={i.qq} value={i.qq}>{i.qq}</option>
@@ -108,38 +148,52 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
           </select>
         </div>
 
-        <div className="form-group">
-          <label>用户列表</label>
-          <div className="convo-list" style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {users.map((u) => (
-              <div
-                key={u}
-                className={`convo-item ${selectedUser === u ? "active" : ""}`}
-                onClick={() => loadMemories(u)}
-              >
-                <span className="key-text">{u}</span>
-              </div>
-            ))}
-          </div>
-          {users.length === 0 && <div className="text-dim mt-sm">暂无记忆数据</div>}
+        <div className="tabs">
+          <button className={tab === "personal" ? "active" : ""} onClick={() => setTab("personal")}>
+            个人记忆
+          </button>
+          <button className={tab === "group" ? "active" : ""} onClick={() => setTab("group")}>
+            群聊记忆
+          </button>
+          <button className={tab === "diary" ? "active" : ""} onClick={() => setTab("diary")}>
+            日记
+          </button>
         </div>
+
+        <div className="convo-list" style={{ maxHeight: "50vh", overflowY: "auto" }}>
+          {userList.map((u) => (
+            <div
+              key={u}
+              className={`convo-item ${selectedUser === u ? "active" : ""}`}
+              onClick={() => loadMemories(u)}
+            >
+              <span className="key-text">
+                {tab === "group" ? groupIdLabel(u) : tab === "diary" ? "嘟嘟的日记" : u}
+              </span>
+            </div>
+          ))}
+        </div>
+        {userList.length === 0 && (
+          <div className="text-dim mt-sm">暂无数据</div>
+        )}
       </div>
 
       {/* Main */}
       <div>
         {selectedUser ? (
           <>
-            {/* Search */}
             <div className="panel">
               <div className="search-bar">
                 <input
                   value={searchQ}
                   onChange={(e) => setSearchQ(e.target.value)}
-                  placeholder="向量检索记忆..."
+                  placeholder="向量检索..."
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 />
                 <button className="btn-primary" onClick={handleSearch}>搜索</button>
-                <button className="btn-ghost" onClick={() => { setViewMode("all"); loadMemories(selectedUser); }}>显示全部</button>
+                <button className="btn-ghost" onClick={() => { setViewMode("all"); loadMemories(selectedUser); }}>
+                  全部
+                </button>
               </div>
 
               {viewMode === "search" && searchResults.length > 0 && (
@@ -150,7 +204,9 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
                         <span className="mem-cat">{r.meta.category || "memory"}</span>
                         <span className="mem-title">{r.meta.title || r.id}</span>
                         <span className="mem-date">{r.meta.date || ""}</span>
-                        <span className="text-dim" style={{ fontSize: "0.72rem" }}>相似度: {r.score.toFixed(3)}</span>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                          相似度 {r.score.toFixed(3)}
+                        </span>
                       </div>
                       <div className="mem-content">{r.text.slice(0, 500)}</div>
                     </div>
@@ -158,7 +214,7 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
                 </div>
               )}
               {viewMode === "search" && searchResults.length === 0 && (
-                <div className="empty-state">未找到相关记忆</div>
+                <div className="empty-state">未找到</div>
               )}
             </div>
 
@@ -197,17 +253,17 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
             {viewMode === "all" && (
               <div className="panel">
                 <div className="panel-header">
-                  <h2>全部记忆 ({memories.length})</h2>
+                  <h2>{memories.length} 条记忆</h2>
                   <button
                     className="btn-danger btn-sm"
                     onClick={async () => {
-                      if (confirm("确定清空此用户所有记忆？")) {
+                      if (confirm("确定清空全部记忆？")) {
                         await clearMemories(activeQQ, selectedUser);
                         setMemories([]);
                       }
                     }}
                   >
-                    清空全部
+                    清空
                   </button>
                 </div>
                 {memories.length === 0 ? (
@@ -242,7 +298,7 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
           </>
         ) : (
           <div className="panel">
-            <div className="empty-state">请从左侧选择一个用户来查看记忆</div>
+            <div className="empty-state">从左侧选择查看记忆</div>
           </div>
         )}
       </div>

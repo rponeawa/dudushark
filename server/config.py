@@ -3,8 +3,21 @@ import os
 from pathlib import Path
 from pydantic import BaseModel
 
+# Load .env file (zero-dependency, runs before env var reads)
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _key, _, _val = _line.partition("=")
+            _key = _key.strip()
+            if _key not in os.environ:
+                os.environ[_key] = _val.strip().strip('"').strip("'")
+
 DATA_DIR = Path(os.environ.get("DUDUSHARK_DATA", Path(__file__).parent.parent / "data"))
 CONFIG_FILE = DATA_DIR / "config.json"
+WEBUI_PASSWORD = os.environ.get("WEBUI_PASSWORD", "")
+AUTH_ENABLED = bool(WEBUI_PASSWORD)
 
 DEFAULT_LLM = {
     "base_url": "https://api.stepfun.com/v1/chat/completions",
@@ -84,6 +97,11 @@ def get_memory_dir(qq: str, user_id: str) -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
+
+def get_convo_dir(qq: str) -> Path:
+    p = get_instance_dir(qq) / "conversations"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 def get_chroma_dir(qq: str) -> Path:
     p = get_instance_dir(qq) / "chroma"

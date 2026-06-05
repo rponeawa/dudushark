@@ -1,24 +1,24 @@
-/* 嘟嘟鲨鱼 Web UI — 深色海洋风 */
+/* 嘟嘟鲨鱼 Web UI */
 
 :root {
-  --bg-deep:   #0a1628;
-  --bg-panel:  #0f1f38;
-  --bg-card:   #152340;
-  --bg-input:  #0c1a30;
-  --bg-hover:  #1a2d4a;
-  --border:    #1e3555;
-  --border-focus: #2a5080;
-  --text:      #d0dae8;
-  --text-dim:  #6a7f9a;
-  --text-bright: #e8f0f8;
-  --accent:    #2db4a0;
-  --accent-hover: #3cccb8;
-  --accent-dim: #1a6b5e;
+  --bg-deep:   #080e18;
+  --bg-panel:  #0c1525;
+  --bg-card:   #111d33;
+  --bg-input:  #0a1222;
+  --bg-hover:  #162544;
+  --border:    #1a2d4a;
+  --border-focus: #2a5799;
+  --text:      #c8d4e2;
+  --text-dim:  #607596;
+  --text-bright: #e4ecf6;
+  --accent:    #3dabf0;
+  --accent-hover: #5ab8f4;
+  --accent-dim: #152d4a;
   --red:       #d94f5a;
   --red-hover: #e8606b;
   --yellow:    #c9a84c;
   --green:     #3da87a;
-  --radius:    6px;
+  --radius:    8px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,10 +29,37 @@ body {
   background: var(--bg-deep);
   color: var(--text);
   min-height: 100vh;
-  line-height: 1.5;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
 body, #root { min-height: 100vh; }
+
+/* ---- Auth / Login ---- */
+
+.auth-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.auth-card {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 40px 36px; width: 100%; max-width: 380px;
+  text-align: center;
+}
+.auth-card h1 {
+  font-size: 1.4rem; font-weight: 700; color: var(--text-bright); margin-bottom: 4px;
+}
+.auth-card .auth-sub {
+  font-size: 0.85rem; color: var(--text-dim); margin-bottom: 24px;
+}
+.auth-card .auth-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.auth-card input {
+  text-align: center; font-size: 1rem; padding: 10px 14px;
+}
+.auth-card button {
+  width: 100%; margin-top: 14px; padding: 10px; font-size: 0.95rem;
+}
+.auth-error { color: var(--red); font-size: 0.82rem; margin-top: 10px; }
 
 /* ---- App Layout ---- */
 
@@ -69,14 +96,20 @@ body, #root { min-height: 100vh; }
 }
 .sidebar-nav-item:hover { background: var(--bg-hover); color: var(--text); }
 .sidebar-nav-item.active { background: var(--bg-card); color: var(--accent); }
-.sidebar-nav-icon { font-size: 1rem; width: 22px; text-align: center; }
+.sidebar-nav-icon { font-size: 1.1rem; width: 24px; text-align: center; }
 .sidebar-nav-label { flex: 1; }
 
 .sidebar-footer {
   padding: 12px 20px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+  display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem;
 }
 .sidebar-status-text { color: var(--text-dim); }
+.sidebar-logout {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  padding: 6px 10px; border-radius: var(--radius); cursor: pointer;
+  font-size: 0.78rem; text-align: center; transition: .12s;
+}
+.sidebar-logout:hover { background: var(--bg-hover); color: var(--red); border-color: var(--red); }
 
 /* ---- Sidebar Toggle ---- */
 
@@ -98,7 +131,7 @@ body, #root { min-height: 100vh; }
 
 .main-content {
   flex: 1; margin-left: 0;
-  padding: 20px 16px 60px; max-width: 1100px; width: 100%;
+  padding: 24px 20px 60px; max-width: 1200px; width: 100%;
   transition: margin-left 0.25s ease;
 }
 
@@ -106,17 +139,17 @@ body, #root { min-height: 100vh; }
 
 .panel {
   background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
 }
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
 }
-.panel-header h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-bright); }
+.panel-header h2 { font-size: 1rem; font-weight: 600; color: var(--text-bright); }
 
 /* ---- Form ---- */
 
-label { display: block; font-size: 0.82rem; color: var(--text-dim); margin-bottom: 4px; }
+label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; }
 input, textarea, select {
   width: 100%; padding: 8px 10px; font-size: 0.88rem;
   font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace;
@@ -132,7 +165,7 @@ textarea { resize: vertical; min-height: 70px; }
 
 button, .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 16px; font-size: 0.88rem;
+  padding: 7px 16px; font-size: 0.85rem;
   border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
   transition: .15s; font-weight: 500;
 }
@@ -142,7 +175,7 @@ button, .btn {
 .btn-danger:hover { background: var(--red-hover); }
 .btn-ghost { background: transparent; color: var(--text); }
 .btn-ghost:hover { background: var(--bg-hover); }
-.btn-sm { padding: 4px 10px; font-size: 0.78rem; }
+.btn-sm { padding: 4px 10px; font-size: 0.76rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- Status Indicators ---- */
@@ -151,13 +184,27 @@ button, .btn {
 .status-dot.online { background: var(--green); }
 .status-dot.offline { background: var(--text-dim); }
 
+/* ---- Status Cards ---- */
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+}
+.stat-card .stat-label { font-size: 0.76rem; color: var(--text-dim); margin-bottom: 4px; }
+.stat-card .stat-value {
+  font-size: 1.1rem; font-weight: 600; color: var(--text-bright);
+}
+
 /* ---- Instance Cards ---- */
 
 .instance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .instance-card {
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px;
+  border-radius: var(--radius); padding: 16px; cursor: pointer; transition: .12s;
 }
+.instance-card:hover { border-color: var(--border-focus); }
+.instance-card.active { border-color: var(--accent); }
 .instance-card h3 { font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace; font-size: 1.05rem; color: var(--text-bright); }
 .instance-card .status-line { font-size: 0.8rem; margin-top: 4px; }
 .instance-card .card-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -184,15 +231,24 @@ button, .btn {
 }
 .convo-item:hover { background: var(--bg-hover); }
 .convo-item.active { border: 1px solid var(--accent-dim); }
-.convo-item .key-text { font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace; font-size: 0.82rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.convo-item .key-text { font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .convo-item .msg-count { font-size: 0.75rem; color: var(--text-dim); }
+
+/* Convo type tag */
+.convo-tag {
+  font-size: 0.68rem; padding: 2px 6px; border-radius: 3px;
+  font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace;
+  white-space: nowrap;
+}
+.convo-tag.group { background: var(--accent-dim); color: var(--accent); }
+.convo-tag.private { background: #1a3a2a; color: var(--green); }
 
 /* ---- Chat Bubbles ---- */
 
 .chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; padding: 4px 0; }
 .chat-msg { padding: 10px 14px; border-radius: var(--radius); font-size: 0.88rem; line-height: 1.55; }
 .chat-msg.user { background: var(--bg-card); align-self: flex-start; max-width: 82%; }
-.chat-msg.bot { background: #132820; border: 1px solid var(--accent-dim); align-self: flex-end; max-width: 82%; }
+.chat-msg.bot { background: #0f1f30; border: 1px solid var(--accent-dim); align-self: flex-end; max-width: 82%; }
 .chat-msg .msg-meta { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 4px; }
 .chat-msg .msg-text { white-space: pre-wrap; word-break: break-word; }
 
@@ -204,17 +260,17 @@ button, .btn {
   border-radius: var(--radius); padding: 14px;
 }
 .mem-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-.mem-cat { font-size: 0.72rem; padding: 2px 8px; background: var(--accent-dim); color: var(--accent); border-radius: 3px; font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace; }
-.mem-title { font-weight: 600; color: var(--text-bright); }
+.mem-cat { font-size: 0.7rem; padding: 2px 8px; background: var(--accent-dim); color: var(--accent); border-radius: 3px; font-family: "SF Mono", Monaco, "Cascadia Code", Menlo, monospace; }
+.mem-title { font-weight: 600; color: var(--text-bright); font-size: 0.9rem; }
 .mem-date { font-size: 0.75rem; color: var(--text-dim); }
 .mem-content { font-size: 0.84rem; color: var(--text); white-space: pre-wrap; }
 .mem-actions { margin-top: 8px; display: flex; gap: 6px; }
 
 /* ---- Settings ---- */
 
-.settings-form { max-width: 600px; }
+.settings-form { max-width: 640px; }
 .section { margin-bottom: 24px; }
-.section-title { font-size: 0.9rem; font-weight: 600; color: var(--text-bright); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.section-title { font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 
 /* ---- Tabs ---- */
 
@@ -263,20 +319,43 @@ button, .btn {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
 
+/* ---- Two-column layout ---- */
+
+.two-col { display: grid; grid-template-columns: 250px 1fr; gap: 14px; align-items: start; }
+.two-col-side { position: sticky; top: 72px; }
+
+/* ---- Section header (no subtitle) ---- */
+
+.page-title { font-size: 1.15rem; font-weight: 700; color: var(--text-bright); margin-bottom: 16px; }
+
 /* ---- Responsive ---- */
 
 @media (max-width: 700px) {
   .sidebar-toggle { display: flex; }
-  .sidebar-overlay { display: block; }
+  .sidebar-overlay.show { display: block; }
   .sidebar { z-index: 210; }
   .sidebar-toggle { z-index: 220; }
   .main-content { padding: 12px 8px 40px; margin-left: 0; }
   .panel { padding: 14px; }
   .form-row { flex-direction: column; }
   .instance-grid { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .chat-msg { max-width: 92%; }
-  .two-col { grid-template-columns: 1fr !important; }
-  .two-col > .panel:first-child { position: static !important; }
+  .two-col { grid-template-columns: 1fr; }
+  .two-col-side { position: static; }
+  .tabs button { padding: 8px 10px; font-size: 0.8rem; }
+  button, .btn { padding: 6px 12px; font-size: 0.82rem; }
+}
+
+@media (max-width: 400px) {
+  html { font-size: 13px; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .panel { padding: 12px 10px; }
+  .main-content { padding: 10px 6px 36px; }
+  .chat-msg { max-width: 96%; }
+  .instance-card h3 { font-size: 0.95rem; }
+  .mem-header { gap: 6px; }
+  .convo-item { padding: 8px 10px; }
 }
 
 @media (min-width: 701px) {

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from server.config import get_memory_dir, get_chroma_dir
+from server.config import DATA_DIR, get_memory_dir, get_chroma_dir
 from server.memory.vector_store import VectorStore
 
 
@@ -92,16 +92,25 @@ class MemoryManager:
 
     def recall_by_category(self, user_id: str, category: str) -> list[dict]:
         """按分类列出记忆。"""
-        user_dir = self._get_user_dir(user_id)
+        user_dir = self._read_user_dir(user_id)
+        if not user_dir:
+            return []
         memories = []
         for f in sorted(user_dir.glob(f"{category}_*.md")):
             text = f.read_text(encoding="utf-8")
             memories.append({"file": str(f), "text": text})
         return memories
 
+    def _read_user_dir(self, user_id: str) -> Path | None:
+        """Return user dir if it exists, without creating it."""
+        p = DATA_DIR / "instances" / self.bot_qq / "memories" / user_id
+        return p if p.is_dir() else None
+
     def recall_all(self, user_id: str) -> list[dict]:
         """列出该用户所有记忆。"""
-        user_dir = self._get_user_dir(user_id)
+        user_dir = self._read_user_dir(user_id)
+        if not user_dir:
+            return []
         memories = []
         for f in sorted(user_dir.glob("*.md")):
             text = f.read_text(encoding="utf-8")
@@ -110,7 +119,9 @@ class MemoryManager:
 
     def recall_by_date(self, user_id: str, date_str: str) -> list[dict]:
         """按日期查找记忆。date_str 格式 YYYY-MM-DD"""
-        user_dir = self._get_user_dir(user_id)
+        user_dir = self._read_user_dir(user_id)
+        if not user_dir:
+            return []
         memories = []
         for f in sorted(user_dir.glob("*.md")):
             text = f.read_text(encoding="utf-8")
@@ -123,7 +134,9 @@ class MemoryManager:
         from datetime import timedelta
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
-        user_dir = self._get_user_dir(user_id)
+        user_dir = self._read_user_dir(user_id)
+        if not user_dir:
+            return []
         memories = []
         for f in sorted(user_dir.glob("*.md")):
             text = f.read_text(encoding="utf-8")

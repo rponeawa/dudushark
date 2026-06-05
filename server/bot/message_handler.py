@@ -108,6 +108,7 @@ class MessageHandler:
         self._lock = asyncio.Lock()
         # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
         self._buffers: dict[tuple[str, str], dict] = {}
+        self._load_conversations()
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
         # 群聊所有用户共享对话历史，私聊各自独立
@@ -127,8 +128,38 @@ class MessageHandler:
             "ts": time.time(),
             "proactive": proactive,
         })
-        if len(self._conversations[key]) > 200:
-            self._conversations[key] = self._conversations[key][-100:]
+        self._persist_convo(key)
+
+    def _convo_file(self, key: str):
+        from server.config import get_convo_dir
+        safe = key.replace("/", "_").replace("\\", "_")
+        return get_convo_dir(self.bot_qq) / f"{safe}.jsonl"
+
+    def _persist_convo(self, key: str):
+        try:
+            msgs = self._conversations.get(key, [])
+            lines = [json.dumps(m, ensure_ascii=False) for m in msgs]
+            self._convo_file(key).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+
+    def _load_conversations(self):
+        from server.config import get_convo_dir
+        convo_dir = get_convo_dir(self.bot_qq)
+        if not convo_dir.exists():
+            return
+        for f in convo_dir.glob("*.jsonl"):
+            try:
+                key = f.stem
+                msgs = []
+                for line in f.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line:
+                        msgs.append(json.loads(line))
+                if msgs:
+                    self._conversations[key] = msgs
+            except Exception:
+                pass
 
     def _split_reply(self, text: str) -> list[str]:
         if not self.cfg.reply_split_enabled:
@@ -286,10 +317,15 @@ class MessageHandler:
             "【SKIP规则 - 最重要】先判断消息是否跟你有关。结合上下文看——明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可、不太确定是不是跟你说的，一律不回。除非你超级超级感兴趣。\n"
             "多个说话人时，回复用quote引用你要回的那条。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
-            "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
-            "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
-            "- group_memory: 关于这个群整体的事，不是个人。没有就null\n"
-            "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编\n- memory/diary/group_memory: 同前"
+            "必须输出JSON。不用markdown代码块包裹。\n"
+            "{\"reply\":\"...\",\"quote\":false,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
+            "- reply: 回复文本，不回就填\"[SKIP]\"\n"
+            "- quote: 是否引用对方的消息（true/false）\n"
+            "- memory: 值得记住的关于这个人的事，没有就null。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。相同类别+标题会更新旧记忆\n"
+            "- diary: 你自己的日记，值得写的时候才写，null居多。格式同memory\n"
+            "- group_memory: 关于这个群整体的事（非个人），null居多。格式同memory\n"
+            "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
+            "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
         )})
 
         prefix = "[群聊]" if is_group else ""
@@ -527,11 +563,17 @@ class MessageHandler:
 
     def get_conversation(self, user_id: str = "", group_id: str = "", key: str = "") -> list[dict]:
         k = key if key else self._conv_key(user_id, group_id)
-        return self._conversations.get(k, [])[-40:]
+        return self._conversations.get(k, [])
 
     def clear_conversation(self, user_id: str = "", group_id: str = "", key: str = ""):
         k = key if key else self._conv_key(user_id, group_id)
         self._conversations.pop(k, None)
+        try:
+            f = self._convo_file(k)
+            if f.exists():
+                f.unlink()
+        except Exception:
+            pass
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())

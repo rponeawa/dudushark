@@ -4,6 +4,7 @@ ChromaDB 向量存储封装 — 使用 SiliconFlow BAAI/bge-m3 嵌入模型。
 
 import logging
 import os
+import re
 
 os.environ.setdefault("CHROMADB_TELEMETRY", "False")
 
@@ -72,13 +73,28 @@ class SiliconFlowEmbedding:
             return [[0.0] * dim for _ in input]
 
 
+_clients: dict[str, PersistentClient] = {}
+
+
+def _get_client(chroma_dir: Path) -> PersistentClient:
+    key = str(chroma_dir.resolve())
+    if key not in _clients:
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        _clients[key] = PersistentClient(path=key)
+    return _clients[key]
+
+
 class VectorStore:
-    """每个用户一个 ChromaDB collection。"""
+    """每个用户一个 ChromaDB collection (共享 PersistentClient)。"""
 
     def __init__(self, chroma_dir: Path, user_id: str):
-        chroma_dir.mkdir(parents=True, exist_ok=True)
-        self.client = PersistentClient(path=str(chroma_dir))
-        safe_name = f"mem_{user_id}".replace("-", "_").replace(".", "_")
+        self.client = _get_client(chroma_dir)
+        # ChromaDB name: 3-512 chars, [a-zA-Z0-9._-], must start/end with alphanumeric
+        safe = re.sub(r"[^a-zA-Z0-9._-]", "_", user_id)
+        safe = safe.strip("_")
+        if len(safe) < 3:
+            safe = safe + "usr"
+        safe_name = f"mem_{safe}"
         self.ef = SiliconFlowEmbedding()
         try:
             self.collection = self.client.get_collection(

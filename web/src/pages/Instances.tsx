@@ -35,7 +35,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
       toast("实例已创建");
       setNewQQ("");
       refresh();
-    } catch (e) {
+    } catch {
       toast("创建失败", false);
     }
     setLoading(false);
@@ -45,9 +45,9 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
     setLoading(true);
     try {
       await startInstance(qq);
-      toast(`实例 ${qq} 已启动`);
+      toast("已启动");
       setTimeout(refresh, 2000);
-    } catch (e) {
+    } catch {
       toast("启动失败", false);
     }
     setLoading(false);
@@ -57,9 +57,9 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
     setLoading(true);
     try {
       await stopInstance(qq);
-      toast(`实例 ${qq} 已停止`);
+      toast("已停止");
       refresh();
-    } catch (e) {
+    } catch {
       toast("停止失败", false);
     }
     setLoading(false);
@@ -82,7 +82,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
 
       <div className="panel">
         <div className="panel-header">
-          <h2>添加新实例</h2>
+          <h2>添加实例</h2>
         </div>
         <div className="form-row" style={{ alignItems: "flex-end" }}>
           <div className="form-group">
@@ -98,12 +98,12 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
             <input
               value={napcatPath}
               onChange={(e) => setNapcatPath(e.target.value)}
-              placeholder="留空则自动检测"
+              placeholder="留空自动检测"
             />
           </div>
           <div className="form-group" style={{ flex: "0 0 auto" }}>
             <button className="btn-primary" onClick={handleCreate} disabled={loading}>
-              创建实例
+              创建
             </button>
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
               )}
             </div>
             <p className="text-dim">
-              打开 NapCatQQ WebUI 查看二维码: <code>http://127.0.0.1:6099/webui/</code>
+              NapCatQQ WebUI: 127.0.0.1:6099/webui/
             </p>
           </div>
         </div>
@@ -140,11 +140,11 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
             <h3>{inst.qq}</h3>
             <div className="status-line">
               <span className={`status-dot ${inst.connected ? "online" : "offline"}`} />
-              OneBot: {inst.connected ? "已连接" : "未连接"}
+              OneBot {inst.connected ? "已连接" : "未连接"}
             </div>
             <div className="status-line">
               <span className={`status-dot ${inst.napcat_running ? "online" : "offline"}`} />
-              NapCat: {inst.napcat_running ? "运行中" : "未运行"}
+              NapCat {inst.napcat_running ? "运行中" : "未运行"}
             </div>
             <div className="card-actions">
               {!inst.connected && (
@@ -158,7 +158,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
                 </button>
               )}
               <button className="btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleShowQR(inst.qq); }}>
-                查看二维码
+                二维码
               </button>
             </div>
           </div>
@@ -166,7 +166,7 @@ export default function Instances({ instances, activeQQ, setActiveQQ, refresh }:
 
         {instances.length === 0 && (
           <div className="empty-state" style={{ gridColumn: "1/-1" }}>
-            还没有实例，在上方添加一个 QQ 号开始吧～
+            还没有实例，在上方添加一个 QQ 号开始吧
           </div>
         )}
       </div>
