@@ -95,6 +95,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
         is_group = bool(kwargs["group_id"])
         target = kwargs["group_id"] if is_group else kwargs["user_id"]
 
+        logger.info(f"[发送] 共{len(replies)}条回复")
         for i, part in enumerate(replies):
             try:
                 text = part.text
