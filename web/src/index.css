@@ -143,6 +143,7 @@ body, #root { min-height: 100vh; }
 .panel {
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
+  width: 100%;
 }
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
