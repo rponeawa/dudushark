@@ -252,8 +252,11 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
+        # 闲聊检测：短消息限制回复长度
+        is_casual = len(text) < 15 and not is_group and "?" not in text and "？" not in text
+
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
-        messages.append({"role": "system", "content": (
+        format_hint = (
             "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
             "【重要】不管什么情况——生气、开心、难过——都必须输出JSON，不要直接写文字。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
@@ -263,8 +266,11 @@ class MessageHandler:
             "- search: 需要查的关键词\n"
             "- quote: 是否引用回复\n"
             "- memory: 需要记住的事（冒犯过你的事一定要记！）没有就null\n"
-            "- diary: 值得写的自身经历，没有就null\n"
-        )})
+            "- diary: 值得写的自身经历，没有就null"
+        )
+        if is_casual:
+            format_hint += "\n\n当前是闲聊，对方只是简单打了个招呼——回复简短一点，一两句就够了，不要太长。"
+        messages.append({"role": "system", "content": format_hint})
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼（onebot_handler 已将 at 转为 "@鱼 " 前缀）
@@ -285,11 +291,14 @@ class MessageHandler:
 
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
+        max_tok = mood.llm_max_tokens(1024)
+        if is_casual:
+            max_tok = min(max_tok, 200)
         payload = {
             "model": llm.model,
             "messages": messages,
             "temperature": mood.llm_temperature(0.85),
-            "max_tokens": mood.llm_max_tokens(1024),
+            "max_tokens": max_tok,
         }
 
         try:
