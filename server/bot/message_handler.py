@@ -438,12 +438,41 @@ class MessageHandler:
         if not reply_text or reply_text.strip() == "[SKIP]":
             return []
 
+        # JSON 解析失败时，异步提取记忆（兜底）
+        if not data and reply_text and len(reply_text) > 10:
+            asyncio.create_task(self._fallback_memory(user_id, user_name, text, reply_text))
+
         result = []
         for i, part in enumerate(self._split_reply(reply_text)):
             qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
             result.append(ReplyPart(part, qid))
             self._append_history(user_id, "assistant", part, group_id)
         return result
+
+    async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
+        """JSON 解析失败时的记忆兜底提取。"""
+        prompt = (
+            f"用户 {user_name} 说: {message}\n鱼回复: {reply}\n\n"
+            "这段对话有没有值得鱼记住的信息？没有回[FORGET]，有的话回: 类别|标题|内容"
+        )
+        msgs = [
+            {"role": "system", "content": "你是嘟嘟鲨鱼。只回[FORGET]或一行记忆。"},
+            {"role": "user", "content": prompt},
+        ]
+        llm = self.cfg.llm
+        payload = {"model": llm.model, "messages": msgs, "temperature": 0.3, "max_tokens": 150}
+        try:
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
+            raw = raw.strip()
+            if not raw or raw == "[FORGET]":
+                return
+            parts = raw.split("|", 2)
+            if len(parts) == 3:
+                c, t, ct = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                if c and t and ct:
+                    self.memory.remember(user_id, c, t, ct)
+        except Exception:
+            pass
 
     def reload_config(self):
         self.cfg = get_instance_config(self.bot_qq)
