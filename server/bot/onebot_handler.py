@@ -99,10 +99,15 @@ class OneBotClient:
         if isinstance(message, list):
             parts = []
             mentioned = False
+            quoted_bot = False
             for seg in message:
                 if isinstance(seg, dict):
                     if seg.get("type") == "at":
                         mentioned = True
+                    elif seg.get("type") == "reply":
+                        # 检查是否引用了嘟嘟的消息
+                        if str(seg.get("data", {}).get("qq", "")) == self.bot_qq:
+                            quoted_bot = True
                     elif seg.get("type") == "text":
                         parts.append(seg.get("data", {}).get("text", ""))
                 elif isinstance(seg, str):
@@ -110,6 +115,8 @@ class OneBotClient:
             text = "".join(parts)
             if mentioned:
                 text = "@鱼 " + text
+            if quoted_bot and not mentioned:
+                text = "[回复鱼] " + text
             return text
         return str(message)
 
