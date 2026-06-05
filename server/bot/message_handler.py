@@ -263,8 +263,19 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
-        # 关键词预检搜索意图
+        # 关键词预检：自动搜索并注入结果
         looks_like_search = bool(re.search(r"搜|查|帮.*找|帮.*看|天气|多少[钱度]|最新|新闻|现在|今天|明天", text))
+        if looks_like_search and self.cfg.web_search_enabled:
+            try:
+                results = await bing_search(text)
+                if results:
+                    search_ctx = (
+                        "## 网络搜索结果（用鱼的语气自然转述，不要直接贴）\n"
+                        + format_search_results(results)
+                    )
+                    messages.append({"role": "system", "content": search_ctx})
+            except Exception:
+                pass
 
         # JSON 格式指令
         messages.append({"role": "system", "content": (
@@ -279,11 +290,6 @@ class MessageHandler:
             "\n不知道答案、事实性问题、需要最新信息时，用多步搜索去查，不要瞎编。闲聊回短一点，别刷屏。"
         )})
 
-        # 搜索意图强烈时，注入到用户消息中
-        search_hint = ""
-        if looks_like_search:
-            search_hint = "（鱼不知道的话用say+search格式去查一下，不要瞎编）"
-
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼（onebot_handler 已将 at 转为 "@鱼 " 前缀）
         mentioned = is_group and text.startswith("@鱼")
@@ -297,7 +303,7 @@ class MessageHandler:
                 role_tag = f"【{a.get('role', '?')}】"
                 break
         display_name = f"{clean_name}{role_tag}"
-        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}{search_hint}"}
+        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
 
