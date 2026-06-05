@@ -296,6 +296,8 @@ class ConfigUpdate(BaseModel):
     mood_enabled: bool | None = None
     admins: list[dict] | None = None
     admins_description: str | None = None
+    family_memory: str | None = None
+    family_note: str | None = None
 
 
 @router.put("/instances/{qq}/config")
@@ -341,6 +343,10 @@ async def update_config(qq: str, body: ConfigUpdate):
         cfg.admins = body.admins
     if body.admins_description is not None:
         cfg.admins_description = body.admins_description
+    if body.family_memory is not None:
+        cfg.family_memory = body.family_memory
+    if body.family_note is not None:
+        cfg.family_note = body.family_note
     save_instance_config(cfg)
     handler = get_message_handler(qq)
     handler.reload_config()

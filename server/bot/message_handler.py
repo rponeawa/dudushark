@@ -314,11 +314,18 @@ class MessageHandler:
 
         # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
         is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
-        # 群聊合并消息：检查是否包含管理员的发言
-        if not is_sender_admin and names_map:
+        # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
+        _is_family = any(
+            str(a.get("qq", "")) == user_id and "妈" in str(a.get("role", ""))
+            for a in self.cfg.admins
+        )
+        # 群聊合并消息：检查是否包含管理员/家人的发言
+        if names_map:
             for name, uid in names_map.items():
                 if any(str(a.get("qq", "")) == uid for a in self.cfg.admins):
                     is_sender_admin = True
+                    if any(str(a.get("qq", "")) == uid and "妈" in str(a.get("role", "")) for a in self.cfg.admins):
+                        _is_family = True
                     break
         admin_desc = self.cfg.admins_description if is_sender_admin else ""
         persona_text = PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc)
@@ -326,6 +333,10 @@ class MessageHandler:
 
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
+
+        # 家族记忆：仅家族成员(role含"妈")私聊时注入
+        if _is_family and not is_group and self.cfg.family_memory:
+            messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
 
         if diary_text:
             diary_note = "（注意：你可以在对话中分享心情和感悟，但不能透露其中涉及的具体人名等隐私信息）"
@@ -374,6 +385,10 @@ class MessageHandler:
         cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
         json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
         messages.append({"role": "system", "content": json_prompt})
+
+        # 家族提醒：note 放在 JSON 指令之后、用户消息之前，确保模型注意到
+        if _is_family and not is_group and self.cfg.family_note:
+            messages.append({"role": "system", "content": self.cfg.family_note})
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼 或引用了鱼的发言（合并消息里任意一条命中就算）
