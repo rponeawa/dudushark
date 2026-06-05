@@ -26,6 +26,28 @@ SPLIT_PATTERN = re.compile(r"(?<=[。！？\n])\s*")
 LLM_RETRIES = 3
 LLM_RETRY_BASE_DELAY = 2.0  # seconds, doubled each retry: 2, 4, 8
 
+# 速率限制：每分钟最多 10 次（StepFun API 限额），留 2 次余量给主动消息
+_RATE_LIMIT = 8
+_RATE_WINDOW = 60.0
+_rate_timestamps: list[float] = []
+_rate_lock = asyncio.Lock()
+
+
+async def _acquire_rate():
+    """获取一次 LLM 调用配额，必要时等待。"""
+    global _rate_timestamps
+    async with _rate_lock:
+        now = time.time()
+        _rate_timestamps = [t for t in _rate_timestamps if now - t < _RATE_WINDOW]
+        if len(_rate_timestamps) >= _RATE_LIMIT:
+            wait = _rate_timestamps[0] + _RATE_WINDOW - now + 1.0
+            if wait > 0:
+                logger.warning(f"LLM 速率限制：等待 {wait:.1f}s...")
+                await asyncio.sleep(wait)
+                now = time.time()
+                _rate_timestamps = [t for t in _rate_timestamps if now - t < _RATE_WINDOW]
+        _rate_timestamps.append(now)
+
 
 def _is_retryable(status: int) -> bool:
     return status in (429, 500, 502, 503, 504)
@@ -33,6 +55,7 @@ def _is_retryable(status: int) -> bool:
 
 async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
     """Call LLM API with exponential backoff retry. Raises on final failure."""
+    await _acquire_rate()
     last_err: str = ""
     for attempt in range(LLM_RETRIES):
         try:
@@ -199,14 +222,11 @@ class MessageHandler:
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
-        # 检索记忆
-        memories = self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
-        memories_text = ""
-        if memories:
+        # 检索记忆（对人的 + 全局日记）
+        def _fmt_memories(mems: list[dict]) -> str:
             lines = []
-            for m in memories:
+            for m in mems:
                 date = m.get("meta", {}).get("date", "未知")
-                # Format ISO date to human-readable: "2026-06-04T17:04:38Z" → "06-04 17:04"
                 try:
                     if "T" in date:
                         d, t = date.replace("Z", "").split("T", 1)
@@ -214,19 +234,37 @@ class MessageHandler:
                         date = f"{parts[1]}-{parts[2]} {t.split(':')[0]}:{t.split(':')[1]}"
                 except Exception:
                     pass
-                lines.append(f"- [{date}] {m['text'][:500]}")
-            memories_text = "\n".join(lines)
+                lines.append(f"- [{date}] {m['text'][:400]}")
+            return "\n".join(lines)
+
+        memories_text = _fmt_memories(
+            self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
+        )
+        diary_text = _fmt_memories(
+            self.memory.recall_by_vector("__diary__", text, n=4)
+        )
 
         # 构建消息 — 独立 system 消息提高缓存命中率
-        # msg[0]=persona(不变→缓存命中), msg[1]=mood, msg[2]=memories, msg[3+]=history
+        # msg[0]=persona(不变→缓存命中), msg[1]=mood, msg[2]=diary, msg[3]=memories, msg[4+]=history
         mood = get_mood(self.bot_qq)
         mood.update()
         mood_context = mood.system_mood_context()
 
         messages = [{"role": "system", "content": PERSONA_SYSTEM_PROMPT}]
 
+        # 注入管理员/特殊角色信息
+        admins = self.cfg.admins
+        if admins:
+            lines = ["以下QQ号在鱼的生命中有特殊角色："]
+            for a in admins:
+                lines.append(f"- {a.get('qq', '?')}: {a.get('role', '?')}")
+            messages.append({"role": "system", "content": "\n".join(lines)})
+
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
+
+        if diary_text:
+            messages.append({"role": "system", "content": "## 鱼的日记（自己的经历和感受）\n" + diary_text})
 
         if memories_text:
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
@@ -341,6 +379,7 @@ class MessageHandler:
                     return
                 q = final_data.get("quote", False)
                 _save_memory(final_data.get("memory"), user_id)
+                _save_memory(final_data.get("diary"), "__diary__")
 
                 client = None
                 from server.bot.onebot_handler import onebot_server
@@ -384,6 +423,7 @@ class MessageHandler:
             reply_text = data.get("reply", "")
             want_quote = data.get("quote", False)
             _save_memory(data.get("memory"), user_id)
+            _save_memory(data.get("diary"), "__diary__")
             forget_info = data.get("forget")
             if forget_info and isinstance(forget_info, dict):
                 _save_memory({**forget_info, "action": "delete"}, user_id)

@@ -239,6 +239,7 @@ class ConfigUpdate(BaseModel):
     proactive_private_probability: float | None = None
     proactive_curiosity_threshold: float | None = None
     mood_enabled: bool | None = None
+    admins: list[dict] | None = None
 
 
 @router.put("/instances/{qq}/config")
@@ -280,6 +281,8 @@ async def update_config(qq: str, body: ConfigUpdate):
         cfg.proactive_curiosity_threshold = body.proactive_curiosity_threshold
     if body.mood_enabled is not None:
         cfg.mood_enabled = body.mood_enabled
+    if body.admins is not None:
+        cfg.admins = body.admins
     save_instance_config(cfg)
     handler = get_message_handler(qq)
     handler.reload_config()

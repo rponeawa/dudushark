@@ -206,6 +206,42 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
             </div>
           </div>
 
+          <div className="section">
+            <div className="section-title">管理员 / 特殊角色</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {(cfg.admins || []).map((a: Record<string, string>, i: number) => (
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    placeholder="QQ号"
+                    value={a.qq || ""}
+                    style={{ width: 160 }}
+                    onChange={(e) => {
+                      const list = [...(cfg.admins || [])];
+                      list[i] = { ...list[i], qq: e.target.value };
+                      setCfg({ ...cfg, admins: list });
+                    }}
+                  />
+                  <input
+                    placeholder="角色（如：妈妈）"
+                    value={a.role || ""}
+                    style={{ flex: 1 }}
+                    onChange={(e) => {
+                      const list = [...(cfg.admins || [])];
+                      list[i] = { ...list[i], role: e.target.value };
+                      setCfg({ ...cfg, admins: list });
+                    }}
+                  />
+                  <button className="btn-danger btn-sm" onClick={() => {
+                    setCfg({ ...cfg, admins: (cfg.admins || []).filter((_: any, j: number) => j !== i) });
+                  }}>删除</button>
+                </div>
+              ))}
+              <button className="btn-ghost btn-sm" onClick={() => {
+                setCfg({ ...cfg, admins: [...(cfg.admins || []), { qq: "", role: "" }] });
+              }}>+ 添加</button>
+            </div>
+          </div>
+
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "保存中..." : "保存设置"}
           </button>

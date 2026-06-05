@@ -40,6 +40,8 @@ class BotConfig(BaseModel):
     proactive_curiosity_threshold: float = 0.35
     # Mood system
     mood_enabled: bool = True
+    # Admin list
+    admins: list[dict] = []
 
 
 def load_global_config() -> dict:

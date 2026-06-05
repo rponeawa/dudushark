@@ -34,6 +34,7 @@ export interface BotConfig {
   group_merge_delay: number;
   napcat_webui_port: number;
   onebot_ws_port: number;
+  admins: Array<{ qq: string; role: string }>;
 }
 
 export interface MemoryItem {
