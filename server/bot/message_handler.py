@@ -278,38 +278,6 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
-        # 关键词预检：自动搜索并注入结果
-        looks_like_search = bool(re.search(r"搜|查|帮.*找|帮.*看|天气|多少[钱度]|最新|新闻|现在|今天|明天", text))
-        if looks_like_search and self.cfg.web_search_enabled:
-            # 用轻量 LLM 确认是否真的是搜索意图
-            confirm_prompt = f"用户说: {text}\n这是想让鱼帮忙搜索/查东西吗？只回 YES 或 NO。"
-            try:
-                confirm_payload = {
-                    "model": llm.model,
-                    "messages": [{"role": "user", "content": confirm_prompt}],
-                    "temperature": 0.0,
-                    "max_tokens": 5,
-                }
-                confirm_raw = await _call_llm(llm.base_url, llm.api_key, confirm_payload, timeout=10)
-                if "YES" in confirm_raw.upper():
-                    clean_q = re.sub(r"@\S+\s*", "", text).strip()
-                    results = await bing_search(clean_q)
-                    if results:
-                        search_ctx = (
-                            "## 网络搜索结果（用鱼的语气自然转述，不要直接贴）\n"
-                            + format_search_results(results)
-                        )
-                        messages.append({"role": "system", "content": search_ctx})
-            except Exception:
-                # LLM 确认失败时，保守起见仍然搜索
-                try:
-                    clean_q = re.sub(r"@\S+\s*", "", text).strip()
-                    results = await bing_search(clean_q)
-                    if results:
-                        messages.append({"role": "system", "content": "## 网络搜索结果\n" + format_search_results(results)})
-                except Exception:
-                    pass
-
         # JSON 格式指令
         messages.append({"role": "system", "content": (
             "【SKIP规则 - 最重要】先判断消息是否跟你有关。结合上下文看——明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可、不太确定是不是跟你说的，一律不回。除非你超级超级感兴趣。\n"
@@ -318,7 +286,7 @@ class MessageHandler:
             "必须输出JSON。格式：{\"reply\": \"...\", \"quote\": false, \"memory\": null} 或 {\"say\": \"...\", \"search\": \"...\"}\n"
             "- reply: 回复文本，多数时候填\"[SKIP]\"\n"
             "- group_memory: 关于这个群整体的事，不是个人。没有就null\n"
-            "- say/search/memory/diary: 同前"
+            "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编\n- memory/diary/group_memory: 同前"
         )})
 
         prefix = "[群聊]" if is_group else ""
