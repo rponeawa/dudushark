@@ -295,7 +295,7 @@ class MessageHandler:
         llm = self.cfg.llm
         max_tok = mood.llm_max_tokens(1024)
         if is_casual:
-            max_tok = min(max_tok, 200)
+            max_tok = min(max_tok, 300)
         payload = {
             "model": llm.model,
             "messages": messages,
@@ -321,6 +321,13 @@ class MessageHandler:
                 d = json.loads(t)
                 return d if isinstance(d, dict) else None
             except (json.JSONDecodeError, TypeError):
+                # 兜底：用正则提取 reply 字段
+                m = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', t)
+                if m:
+                    try:
+                        return {"reply": json.loads(f'"{m.group(1)}"')}
+                    except Exception:
+                        pass
                 return None
 
         data = _parse_json(full_reply)
