@@ -284,9 +284,8 @@ class MessageHandler:
             "【重要】不管什么情况都必须输出JSON。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
             "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
-            "- reply: 回复文本。大部分群聊消息直接填\"[SKIP]\"，真的感兴趣或@你才回\n"
-            "- say/search/quote/memory/diary: 同前\n"
-            "\n记住：群里SKIP是默认。不@你、你没感觉的消息，直接SKIP。"
+            "- reply: 回复文本。群聊规则：真的感兴趣、有人@鱼、或提到\"嘟嘟\"且你觉得有必要回——才回。其余一律\"[SKIP]\"\n"
+            "- say/search/quote/memory/diary: 同前"
         )})
 
         prefix = "[群聊]" if is_group else ""
