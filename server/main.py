@@ -110,8 +110,8 @@ async def onebot_ws(ws: WebSocket, qq: str):
                     else:
                         await client.send_private_msg(kwargs["user_id"], text)
                 if i < len(replies) - 1:
-                    # 模拟打字时间：每字 ~0.05s + 基础 1s
-                    typing_delay = max(1.0, len(text) * 0.05 + 0.5)
+                    # 模拟打字时间：每字 ~0.06s + 基础 0.8s，最少 1.5s
+                    typing_delay = max(1.5, len(text) * 0.06 + 0.8)
                     await asyncio.sleep(typing_delay)
             except Exception as e:
                 logger.error(f"发送消息失败: {e}")
