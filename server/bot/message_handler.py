@@ -263,24 +263,19 @@ class MessageHandler:
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
-        # 检测搜索意图
-        wants_search = bool(re.search(r"搜|查|帮.*找|帮.*看", text))
-
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
-        hint = (
+        messages.append({"role": "system", "content": (
             "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
             "【重要】不管什么情况都必须输出JSON。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
-            "多步搜索：{\"say\": \"让鱼看看…\", \"search\": \"搜索关键词\", \"quote\": false}\n"
+            "多步搜索：{\"say\": \"...\", \"search\": \"...\", \"quote\": false}\n"
             "- reply: 回复文本。不说话填\"[SKIP]\"\n"
-            "- say: 先说的话，然后鱼去查（不确定的事、别人叫你查东西时用这个格式，不要直接编）\n"
-            "- search: 搜索关键词\n"
+            "- say: 先简短说一句（比如表示要去查一下），内容你自己定\n"
+            "- search: 你要搜的关键词\n"
             "- quote/memory/diary: 同前\n"
-            "\n如果你觉得当前只是闲聊，回短一点，别刷屏。"
-        )
-        if wants_search:
-            hint += "\n\n用户让鱼帮忙查东西——必须用多步搜索格式（say+search），不能直接回reply。"
-        messages.append({"role": "system", "content": hint})
+            "\n当你不知道答案、别人问你事实性问题、或者你需要最新信息时，用多步搜索格式去查一下，不要瞎编。查完再回复。\n"
+            "\n如果只是闲聊，回短一点，别刷屏。"
+        )})
 
         prefix = "[群聊]" if is_group else ""
         # 检测是否 @了鱼（onebot_handler 已将 at 转为 "@鱼 " 前缀）
