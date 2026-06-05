@@ -252,12 +252,12 @@ class MessageHandler:
 
         messages = [{"role": "system", "content": PERSONA_SYSTEM_PROMPT}]
 
-        # 注入管理员/特殊角色信息
+        # 注入管理员/特殊角色信息（仅作背景参考，鱼自行决定如何回应）
         admins = self.cfg.admins
         if admins:
-            lines = ["以下QQ号在鱼的生命中有特殊角色："]
+            lines = ["你知道以下QQ号的特殊身份（只在你觉得自然的时候流露，不用刻意）："]
             for a in admins:
-                lines.append(f"- {a.get('qq', '?')}: {a.get('role', '?')}")
+                lines.append(f"- {a.get('qq', '?')} 是 {a.get('role', '?')}")
             messages.append({"role": "system", "content": "\n".join(lines)})
 
         if mood_context:
