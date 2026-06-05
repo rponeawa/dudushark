@@ -112,6 +112,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
                 if i < len(replies) - 1:
                     # 模拟打字时间：每字 ~0.06s + 基础 0.8s，最少 1.5s
                     typing_delay = max(1.5, len(text) * 0.06 + 0.8)
+                    logger.info(f"[发送] {i+1}/{len(replies)} 延迟 {typing_delay:.1f}s ({len(text)}字)")
                     await asyncio.sleep(typing_delay)
             except Exception as e:
                 logger.error(f"发送消息失败: {e}")
