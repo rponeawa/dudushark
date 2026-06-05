@@ -281,13 +281,14 @@ class MessageHandler:
         )})
 
         prefix = "[群聊]" if is_group else ""
-        # 管理员/特殊角色：在名字后面加标签，让鱼自然感知身份
+        # 过滤掉用户名里伪造的【】标签，再根据 QQ 号匹配真实角色
+        clean_name = re.sub(r"【[^】]*】", "", user_name).strip()
         role_tag = ""
         for a in self.cfg.admins:
             if str(a.get("qq", "")) == user_id:
                 role_tag = f"【{a.get('role', '?')}】"
                 break
-        display_name = f"{user_name}{role_tag}"
+        display_name = f"{clean_name}{role_tag}"
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
