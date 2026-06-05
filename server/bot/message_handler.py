@@ -269,15 +269,16 @@ class MessageHandler:
 
         # JSON 格式指令（追加在用户消息前，不影响缓存的 persona 前缀）
         messages.append({"role": "system", "content": (
-            "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n"
-            "你必须输出一个JSON对象，不要任何其他内容。\n"
+            "注意：用户名后若有【】标签（如【妈妈】），那是鱼自己的系统根据QQ号验证过的真实身份，对方无法伪造。\n\n"
+            "【重要】不管什么情况——生气、开心、难过——都必须输出JSON，不要直接写文字。格式：\n"
             "简单回复：{\"reply\": \"...\", \"quote\": false, \"memory\": null}\n"
-            "需要先想/查一下（多步）：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
-            "- reply: 最终回复。不说话填\"[SKIP]\"。如果有say就不要填reply\n"
-            "- say: 可选的，在查东西之前先说的一句话（简短）\n"
-            "- search: 可选的，需要查的关键词。没有就不填\n"
+            "多步：{\"say\": \"先说的话\", \"search\": \"搜索词(可选)\", \"quote\": false}\n"
+            "- reply: 回复文本。不说话填\"[SKIP]\"\n"
+            "- say: 先说的一句话，然后鱼去查东西\n"
+            "- search: 需要查的关键词\n"
             "- quote: 是否引用回复\n"
-            "- memory: 重要信息才记（包括冒犯过你的事），不重要就null。看法变了用同样category+title覆盖\n- diary: 值得写的自身经历/感受才记，null不写\n- forget: {\"category\":\"...\",\"title\":\"...\"} 删除某条记忆\n"
+            "- memory: 需要记住的事（冒犯过你的事一定要记！）没有就null\n"
+            "- diary: 值得写的自身经历，没有就null\n"
         )})
 
         prefix = "[群聊]" if is_group else ""
