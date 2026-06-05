@@ -133,24 +133,7 @@ class MessageHandler:
         if not self.cfg.reply_split_enabled:
             return [text]
         text = text.strip()
-        if len(text) <= 80:
-            return [text]
-        parts = []
-        paragraphs = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()]
-        current = ""
-        for para in paragraphs:
-            if len(current) + len(para) > 150 and current:
-                parts.append(current.strip())
-                current = para
-            else:
-                current += para
-        if current.strip():
-            parts.append(current.strip())
-        if len(parts) == 1 and len(parts[0]) > 200:
-            long_text = parts[0]
-            parts = []
-            for i in range(0, len(long_text), 150):
-                parts.append(long_text[i : i + 150])
+        parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()]
         return parts[: self.cfg.reply_split_max]
 
     async def handle(
