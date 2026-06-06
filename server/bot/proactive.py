@@ -197,10 +197,9 @@ class ProactiveScheduler:
         content = r.get("content", "")
         user_id = r.get("user_id", "")
         group_id = r.get("group_id", "")
+        # 提醒始终私聊发送，不在群里刷屏
         try:
-            if group_id:
-                await client.send_group_msg(group_id, content)
-            else:
+            if user_id:
                 await client.send_private_msg(user_id, content)
             logger.info(f"[{self.bot_qq}] Reminder fired: to={user_id or group_id}")
         except Exception as e:
