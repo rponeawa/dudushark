@@ -51,6 +51,9 @@ export interface BotConfig {
   napcat_webui_port: number;
   onebot_ws_port: number;
   admins: Array<{ qq: string; role: string }>;
+  admins_description: string;
+  family_memory: string;
+  family_note: string;
 }
 
 export interface MemoryItem {

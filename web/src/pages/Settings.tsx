@@ -199,6 +199,39 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
           </div>
 
           <div className="section">
+            <div className="section-title">管理员描述 (admins_description)</div>
+            <div className="form-group">
+              <textarea
+                value={cfg.admins_description || ""}
+                onChange={(e) => setCfg({ ...cfg, admins_description: e.target.value })}
+                rows={4}
+                placeholder="注入 system prompt 的管理员描述"
+              />
+            </div>
+          </div>
+
+          <div className="section">
+            <div className="section-title">家族记忆 (family_memory)</div>
+            <div className="form-group">
+              <textarea
+                value={cfg.family_memory || ""}
+                onChange={(e) => setCfg({ ...cfg, family_memory: e.target.value })}
+                rows={6}
+                placeholder="仅家人私聊时注入的家族记忆"
+              />
+            </div>
+            <div className="form-group">
+              <label>家族提醒 (family_note)</label>
+              <textarea
+                value={cfg.family_note || ""}
+                onChange={(e) => setCfg({ ...cfg, family_note: e.target.value })}
+                rows={3}
+                placeholder="伴随家族记忆的提示词"
+              />
+            </div>
+          </div>
+
+          <div className="section">
             <div className="section-title">管理员</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(cfg.admins || []).map((a: Record<string, string>, i: number) => (
