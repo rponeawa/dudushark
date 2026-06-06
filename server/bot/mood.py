@@ -27,8 +27,6 @@ _SLEEP_FLAVOR = {
     "awake": "",
     "sleepy": "",
     "just_woke": "",
-    "night_owl": "",
-    "daydream": "",
     "sleeping": "你正在睡觉，被吵醒了也迷迷糊糊的。回复要非常非常简短，不想说话。",
 }
 
@@ -131,23 +129,6 @@ class DuduMood:
         """Every 2-6 hours, Dudu re-decides how she feels about the current time."""
         if now < self._offset_until:
             return
-        # Night owl: late hours can get a positive boost
-        hour = self._hour()
-        if hour >= 22 or hour <= 4:
-            if random.random() < 0.25:
-                self.sleep_state = "night_owl"
-                self.sleep_state_until = now + random.randint(1800, 5400)
-                self._mood_offset = random.uniform(0.3, 0.6)
-                self._offset_until = now + random.randint(7200, 14400)
-                return
-        # Day dream: daytime can get sleepy
-        if 10 <= hour <= 17:
-            if random.random() < 0.12:
-                self.sleep_state = "daydream"
-                self.sleep_state_until = now + random.randint(600, 2400)
-                self._mood_offset = random.uniform(-0.3, -0.05)
-                self._offset_until = now + random.randint(7200, 14400)
-                return
         # Normal drift: vary ±0.15 around baseline
         self._mood_offset = random.uniform(-0.15, 0.15)
         self._offset_until = now + random.randint(7200, 14400)
@@ -155,12 +136,6 @@ class DuduMood:
     def _tick_sleep(self, now: float):
         # Sleeping state is handled by _full_update
         if self.sleep_state == "sleeping":
-            return
-        # Custom states (night_owl, daydream) handle their own timers
-        if self.sleep_state in ("night_owl", "daydream"):
-            if now >= self.sleep_state_until:
-                self.sleep_state = "awake"
-                self.sleep_state_until = 0
             return
 
         if now < self.sleep_state_until:
@@ -182,10 +157,8 @@ class DuduMood:
             return 0.02
         if self.sleep_state == "sleepy":
             return 0.08
-        if self.sleep_state in ("just_woke", "night_owl"):
+        if self.sleep_state == "just_woke":
             return 2.0
-        if self.sleep_state == "daydream":
-            return 0.15
         return 1.0
 
 
