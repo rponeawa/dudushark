@@ -122,26 +122,7 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
 
           <div className="section">
             <div className="section-title">回复行为</div>
-            <div className="form-group">
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={cfg.reply_split_enabled}
-                  onChange={(e) => setCfg({ ...cfg, reply_split_enabled: e.target.checked })}
-                  style={{ width: "auto" }}
-                />
-                长回复自动拆分
-              </label>
-            </div>
             <div className="form-row">
-              <div className="form-group">
-                <label>最多拆分条数</label>
-                <input
-                  type="number" min={1} max={10}
-                  value={cfg.reply_split_max}
-                  onChange={(e) => setCfg({ ...cfg, reply_split_max: Number(e.target.value) })}
-                />
-              </div>
               <div className="form-group">
                 <label>私聊合并等待 (秒)</label>
                 <input
