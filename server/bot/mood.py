@@ -16,11 +16,11 @@ _HOURLY_BASELINE = {
 }
 
 _HOURLY_FLAVOR = {
-    (0, 6): "夜深了，周围好安静。你有点困困的，但也不一定非要睡觉——毕竟你是赛博大鲨鱼，偶尔熬夜也很正常。说话轻轻的，带点慵懒。",
-    (6, 10): "天刚亮不久。你刚刚迷迷糊糊地醒来，还有点没睡醒的感觉。说话可以带点迷糊和软绵绵的感觉，像刚睁开眼的鲨鱼。",
-    (10, 18): "现在是白天，你精神不错。说话可以比平时活泼一些，但也不用太兴奋——保持你的自然风格就好。",
-    (18, 22): "到了晚上，你反而最精神了！作为赛博大鲨鱼，夜晚是你的主场。可以多一点点调皮和活泼，但不要过度。",
-    (22, 24): "夜深了，你有点累了，开始犯困。说话会变得简短慵懒，偶尔提到想睡觉或者打哈欠。",
+    (0, 7): "夜深了，你睡得正香，被吵醒了也迷迷糊糊的。回复要非常简短，不想说话。",
+    (7, 10): "天刚亮不久。你刚刚迷迷糊糊地醒来，还有点没睡醒的感觉。说话可以带点迷糊和软绵绵的感觉。",
+    (10, 18): "现在是白天，你精神不错。说话可以比平时活泼一些。",
+    (18, 22): "到了晚上，你反而最精神了！可以多一点点调皮和活泼。",
+    (22, 24): "夜深了，你有点累了，开始犯困。说话会变得简短慵懒。",
 }
 
 _SLEEP_FLAVOR = {
@@ -29,6 +29,7 @@ _SLEEP_FLAVOR = {
     "just_woke": "",
     "night_owl": "",
     "daydream": "",
+    "sleeping": "你正在睡觉，被吵醒了也迷迷糊糊的。回复要非常非常简短，不想说话。",
 }
 
 
@@ -107,6 +108,14 @@ class DuduMood:
 
     def _full_update(self, now: float):
         self._last_update = now
+        hour = self._hour()
+        # 深夜 0-7 点固定为睡眠状态
+        if 0 <= hour < 7:
+            self.sleep_state = "sleeping"
+            self.sleep_state_until = now + 3600
+            self._mood_offset = -0.3
+            self.energy = 0.05
+            return
         self._refresh_offset(now)
         self._tick_sleep(now)
 
@@ -144,6 +153,9 @@ class DuduMood:
         self._offset_until = now + random.randint(7200, 14400)
 
     def _tick_sleep(self, now: float):
+        # Sleeping state is handled by _full_update
+        if self.sleep_state == "sleeping":
+            return
         # Custom states (night_owl, daydream) handle their own timers
         if self.sleep_state in ("night_owl", "daydream"):
             if now >= self.sleep_state_until:
@@ -166,6 +178,8 @@ class DuduMood:
             self.sleep_state_until = now + random.randint(3600, 7200)
 
     def _sleep_modifier(self) -> float:
+        if self.sleep_state == "sleeping":
+            return 0.02
         if self.sleep_state == "sleepy":
             return 0.08
         if self.sleep_state in ("just_woke", "night_owl"):
