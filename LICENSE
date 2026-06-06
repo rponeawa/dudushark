@@ -1,0 +1,40 @@
+MIT License with Identity Protection
+
+Copyright (c) 2026 rpone@SharkOrb Tech
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, and distribute the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+1. The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+2. The Software's architecture, code structure, and technical implementation
+   may be freely used as a reference for building other QQ bot projects.
+
+3. **Identity and Persona Protection**: You may NOT deploy, distribute, or
+   operate a QQ bot that uses the specific character identity, system prompts,
+   persona definitions, or creative content that defines "嘟嘟鲨鱼"
+   (DuduShark). This includes but is not limited to:
+   - The character name, backstory, and personality defined in `server/bot/persona.py`
+   - The distinctive speech patterns, catchphrases, and behavioral traits
+   - The shark-themed identity and associated creative elements
+   - Any configuration that results in a bot substantially impersonating
+     or replicating the DuduShark persona
+
+4. **Deployment Restriction**: You may study, modify, and run this Software
+   for personal, educational, or research purposes. You may deploy modified
+   versions that create distinctly different bot identities. You may NOT
+   deploy instances that present themselves as 嘟嘟鲨鱼 or use its
+   distinctive persona.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
