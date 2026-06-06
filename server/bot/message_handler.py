@@ -178,6 +178,12 @@ class MessageHandler:
                         msgs.append(json.loads(line))
                 if msgs:
                     self._conversations[key] = msgs
+                    # 从消息内容检测对话类型
+                    is_group = any(
+                        "[群聊]" in m.get("content", "") or "[1]" in m.get("content", "")
+                        for m in msgs
+                    )
+                    self._convo_types[key] = "group" if is_group else "private"
             except Exception:
                 pass
 
