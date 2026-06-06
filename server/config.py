@@ -21,7 +21,7 @@ AUTH_ENABLED = bool(WEBUI_PASSWORD)
 
 DEFAULT_LLM = {
     "base_url": "https://api.stepfun.com/v1/chat/completions",
-    "model": "step-3.5-flash-2603",
+    "model": "step-3.7-flash",
     "api_key": os.environ.get("STEPFUN_API_KEY", ""),
 }
 
