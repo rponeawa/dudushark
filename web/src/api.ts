@@ -129,7 +129,7 @@ export const updateConfig = (qq: string, data: Partial<BotConfig>) =>
 
 // Conversations
 export const listConversations = (qq: string) =>
-  req<{ conversations: string[] }>(`/instances/${qq}/conversations`);
+  req<{ conversations: Array<{ key: string; type: "group" | "private" }> }>(`/instances/${qq}/conversations`);
 export const getConversation = (qq: string, key: string) =>
   req<{ key: string; messages: ChatMessage[] }>(`/instances/${encodeURIComponent(qq)}/conversations/${encodeURIComponent(key)}`);
 export const clearConversation = (qq: string, key: string) =>
