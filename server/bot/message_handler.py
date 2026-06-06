@@ -435,14 +435,19 @@ class MessageHandler:
         display_name = f"{clean_name}{role_tag}"
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
-        messages.append(user_msg)
-
-        # SKIP + 记忆检查放在用户消息之后、紧贴用户消息，确保 LLM 最后看到
-        if is_group and not mentioned:
-            messages.append({"role": "system", "content": "（以上是群聊消息。不是跟你说话的就SKIP。不确定就SKIP。）"})
-        messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
-        messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
+
+        # 群聊 SKIP 预判：独立小 LLM 调用，判断是否值得回复
+        if is_group and not mentioned:
+            skip_check = await self._should_skip_group(text, group_id)
+            if skip_check:
+                return []
+        elif is_group and mentioned:
+            messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
+
+        messages.append(user_msg)
+        # 记忆检查放在用户消息之后
+        messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
@@ -678,6 +683,28 @@ class MessageHandler:
     def reload_config(self):
         self.cfg = get_instance_config(self.bot_qq)
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
+
+    async def _should_skip_group(self, text: str, group_id: str = "") -> bool:
+        """独立小 LLM 判断群聊消息是否值得回复。True=跳过, False=回复。"""
+        try:
+            llm = self.cfg.llm
+            prompt = (
+                "你是群聊消息过滤器。判断嘟嘟鲨鱼是否应该回复以下群聊消息。\n"
+                "回复 YES 的情况：消息极其有趣、让鱼超级感兴趣、在认真求助、话题是鲨鱼/海洋/睡觉/软绵绵/科技。\n"
+                "回复 NO 的情况：日常闲聊、寒暄、路人对话、不感兴趣的话题、模棱两可不确定是否跟鱼有关。\n"
+                "只输出 YES 或 NO，不要解释。"
+            )
+            payload = {
+                "model": llm.model, "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text[:500]},
+                ], "temperature": 0.3, "max_tokens": 5,
+            }
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
+            result = raw.strip().upper()
+            return "NO" in result and "YES" not in result
+        except Exception:
+            return False  # 出错时默认不跳过（宁可多回不漏）
 
     def _save_remind(self, remind: dict, user_id: str, group_id: str = ""):
         """保存一次性定时提醒到 reminders.json。"""
