@@ -56,8 +56,6 @@ def _is_retryable(status: int) -> bool:
 async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
     """Call LLM API with exponential backoff retry. Raises on final failure."""
     await _acquire_rate()
-    # Suppress reasoning mode (consumes token budget, produces no content)
-    payload = {**payload, "reasoning_effort": None}
     last_err: str = ""
     for attempt in range(LLM_RETRIES):
         try:
