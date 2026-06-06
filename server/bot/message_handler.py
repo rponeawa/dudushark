@@ -125,6 +125,8 @@ class MessageHandler:
         # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
         self._buffers: dict[tuple[str, str], dict] = {}
         self._last_combined: dict[str, str] = {}  # conv_key -> 最近一次合并的全文
+        self._last_relay_ts: float = 0.0  # 防止短时间内重复转达
+        self._last_relay_hash: str = ""
         self._load_conversations()
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
@@ -786,6 +788,14 @@ class MessageHandler:
             content = str(relay.get("content", "")).strip()
             if not to_role or not content:
                 return
+            # 防重复：30秒内相同内容不重复发送
+            relay_hash = f"{from_user_id}:{to_role}:{content}"
+            now = time.time()
+            if relay_hash == self._last_relay_hash and now - self._last_relay_ts < 30:
+                logger.info(f"[{self.bot_qq}] Relay dedup blocked: {relay_hash[:50]}")
+                return
+            self._last_relay_ts = now
+            self._last_relay_hash = relay_hash
             # 查找目标管理员的 QQ 号
             target_qq = None
             for a in self.cfg.admins:
