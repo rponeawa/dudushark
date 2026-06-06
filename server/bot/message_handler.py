@@ -368,7 +368,18 @@ class MessageHandler:
             messages.append({"role": "system", "content": "## 关于这个群的记忆\n" + group_mem_text})
 
         if memories_text:
-            messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text})
+            # 附上已有记忆的标题列表，帮助 LLM 判断是否需要更新已有条目
+            existing_titles = []
+            for mem in self.memory.recall_all(user_id):
+                t = mem.get("text", "")
+                title_m = re.search(r"^# (.+)", t)
+                cat_m = re.search(r"类型: (.+)", t)
+                if title_m:
+                    existing_titles.append(f"{cat_m.group(1) if cat_m else '?'}/{title_m.group(1)}")
+            title_hint = ""
+            if existing_titles:
+                title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。更新已有条目时用相同的category+title。）"
+            messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
 
         history = self._get_history(user_id, group_id)
         # 群聊用适度压缩，私聊用正常压缩
