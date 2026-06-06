@@ -370,7 +370,8 @@ class MessageHandler:
         if _is_family and not is_group and self.cfg.family_memory:
             messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
 
-        if diary_text:
+        # 日记仅在私聊注入，群聊不暴露
+        if diary_text and not is_group:
             diary_note = "（注意：你可以在对话中分享心情和感悟，但不能透露其中涉及的具体人名等隐私信息）"
             messages.append({"role": "system", "content": "## 鱼的全局记忆（自己的经历和感受）\n" + diary_note + "\n" + diary_text})
 
