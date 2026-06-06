@@ -295,7 +295,7 @@ export default function Status() {
                     <span className="mem-title">{d.toLocaleString("zh-CN")}</span>
                   </div>
                   <div className="mem-content">
-                    {r.group_id ? `群聊 ${r.group_id}: ` : `私聊 ${r.user_id}: `}{r.content}
+                    私聊 {r.user_id}: {r.content}
                   </div>
                 </div>
               );
