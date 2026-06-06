@@ -308,9 +308,22 @@ class MessageHandler:
                 lines.append(f"- [{date}] {m['text'][:400]}")
             return "\n".join(lines)
 
-        memories_text = _fmt_memories(
-            self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
-        )
+        # 个人记忆检索：群聊合并消息时检索所有说话人的记忆
+        personal_memories = []
+        seen_ids = set()
+        if is_group and names_map:
+            for uid in names_map.values():
+                if uid not in seen_ids:
+                    seen_ids.add(uid)
+                    personal_memories.extend(
+                        self.memory.recall_by_vector(uid, text, n=max(1, self.cfg.memory_retrieval_count // 2))
+                    )
+            # 去重 + 按分数排序
+            personal_memories.sort(key=lambda x: x.get("score", 0), reverse=True)
+            personal_memories = personal_memories[:self.cfg.memory_retrieval_count]
+        else:
+            personal_memories = self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
+        memories_text = _fmt_memories(personal_memories)
         diary_text = _fmt_memories(
             self.memory.recall_by_vector("__diary__", text, n=4)
         )
