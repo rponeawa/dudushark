@@ -201,14 +201,7 @@ class MessageHandler:
             return [text]
         text = text.strip()
         parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()]
-        # 闲聊短回复限制2段，普通最多3句，长篇最多5段
-        if len(text) < 200:
-            max_parts = 2
-        elif len(text) < 500:
-            max_parts = 3
-        else:
-            max_parts = self.cfg.reply_split_max
-        return parts[:max_parts]
+        return parts
 
     async def handle(
         self, user_id: str, user_name: str, text: str,
