@@ -696,7 +696,7 @@ class MessageHandler:
                 ctx_lines.append(f"{role}: {m.get('content', '')[:80]}")
             context = "\n".join(ctx_lines) if ctx_lines else "（暂无历史）"
 
-            at_note = "（注意：这条消息有人@了鱼，但鱼如果正在生这个人的气，仍然可以不回。）" if mentioned else ""
+            at_note = "（注意：这条消息有人@了鱼，但鱼如果正在生这个人的气，仍然可以不回。另外如果管理员在最近的对话中要求鱼不要回复/SKIP，鱼必须听从。）" if mentioned else "（另外如果管理员在最近的对话中要求鱼不要回复/SKIP，鱼必须听从。）"
             prompt = (
                 f"{persona_brief}\n\n"
                 "你是过滤器。鱼在群里非常安静，绝大多数时候都不说话。请严格判断她是否应该回复。\n"
