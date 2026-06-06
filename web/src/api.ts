@@ -150,3 +150,6 @@ export const deleteMemory = (qq: string, userId: string, category: string, title
   req(`/instances/${encodeURIComponent(qq)}/memories/${userId}/${category}/${encodeURIComponent(title)}`, { method: "DELETE" });
 export const clearMemories = (qq: string, userId: string) =>
   req(`/instances/${encodeURIComponent(qq)}/memories/${userId}`, { method: "DELETE" });
+
+export interface Reminder { at_utc: number; content: string; user_id: string; group_id: string; }
+export const getReminders = (qq: string) => req<{ reminders: Reminder[] }>(`/instances/${qq}/reminders`);

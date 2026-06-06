@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, SystemStatus, InstanceDetailStatus, MoodState } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, SystemStatus, InstanceDetailStatus, MoodState, Reminder } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -68,6 +68,7 @@ export default function Status() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [detailQQ, setDetailQQ] = useState<string>("");
   const [detail, setDetail] = useState<InstanceDetailStatus | null>(null);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = async () => {
@@ -99,6 +100,15 @@ export default function Status() {
       refreshDetail(status.instances[0].qq);
     }
   }, [status]);
+
+  useEffect(() => {
+    if (!detailQQ) return;
+    getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => setReminders([]));
+    const t = setInterval(() => {
+      getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, [detailQQ]);
 
   if (loading) return <div className="empty-state">加载中...</div>;
 
@@ -264,6 +274,32 @@ export default function Status() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {reminders.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">
+            <h2>定时提醒 ({reminders.length})</h2>
+          </div>
+          <div className="mem-list">
+            {reminders.map((r, i) => {
+              const d = new Date(r.at_utc * 1000);
+              const now = new Date();
+              const diff = Math.floor((d.getTime() - now.getTime()) / 60000);
+              return (
+                <div key={i} className="mem-item">
+                  <div className="mem-header">
+                    <span className="mem-cat">{diff > 0 ? `${diff}分钟后` : "即将"}</span>
+                    <span className="mem-title">{d.toLocaleString("zh-CN")}</span>
+                  </div>
+                  <div className="mem-content">
+                    {r.group_id ? `群聊 ${r.group_id}: ` : `私聊 ${r.user_id}: `}{r.content}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

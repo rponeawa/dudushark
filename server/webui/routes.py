@@ -224,6 +224,19 @@ async def instance_detail_status(qq: str):
     }
 
 
+@router.get("/instances/{qq}/reminders")
+async def get_reminders(qq: str):
+    from server.config import get_reminders_path
+    path = get_reminders_path(qq)
+    if not path.exists():
+        return {"reminders": []}
+    try:
+        reminders = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        reminders = []
+    return {"reminders": [{"at_utc": r["at_utc"], "content": r["content"], "user_id": r["user_id"], "group_id": r.get("group_id", "")} for r in reminders]}
+
+
 @router.post("/instances/create")
 async def create_instance(qq: str, napcat_path: str = ""):
     cfg = load_global_config()
