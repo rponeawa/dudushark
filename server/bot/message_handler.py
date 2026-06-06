@@ -464,8 +464,6 @@ class MessageHandler:
             user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         self._append_history(user_id, "user", text, group_id)
 
-        if is_group and mentioned:
-            messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
 
         messages.append(user_msg)
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
@@ -585,8 +583,8 @@ class MessageHandler:
                 reply_txt = final_data.get("reply", "") if final_data else ""
                 if not reply_txt or reply_txt.strip() == "[SKIP]":
                     return
-                if is_g and not mentioned:
-                    override = await self._should_skip_group(text, group_id, False)
+                if is_g:
+                    override = await self._should_skip_group(text, group_id, mentioned)
                     if override:
                         return
                 q = final_data.get("quote", False)
@@ -677,8 +675,8 @@ class MessageHandler:
             return []
 
         # 群聊二次验证：主 LLM 决定回复后，独立 LLM 用上下文最终确认
-        if is_group and not mentioned:
-            override = await self._should_skip_group(text, group_id, False)
+        if is_group:
+            override = await self._should_skip_group(text, group_id, mentioned)
             if override:
                 logger.info(f"[{self.bot_qq}] Post-reply SKIP override for {group_id}")
                 return []
