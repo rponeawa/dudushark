@@ -62,9 +62,9 @@ class DuduMood:
     def llm_temperature(self, base: float = 0.85) -> float:
         return base
 
-    def llm_max_tokens(self, base: int = 2048) -> int:
+    def llm_max_tokens(self, base: int = 4096) -> int:
         if self.sleep_state == "sleepy":
-            return max(512, base // 2)
+            return max(1024, base // 2)
         return base
 
     def system_mood_context(self) -> str:

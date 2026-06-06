@@ -73,17 +73,17 @@ async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float =
                 content = msg.get("content", "").strip()
                 if content:
                     return content
-                # Fallback: model in reasoning mode, extract final answer from reasoning
+                # Fallback: model in reasoning mode, extract JSON from reasoning
                 reasoning = msg.get("reasoning", "").strip()
                 if reasoning:
-                    # Try to find JSON in the last ~500 chars of reasoning
-                    tail = reasoning[-800:]
-                    m = re.search(r'\{[^{}]*"reply"[^}]*\}', tail)
+                    # Try to find JSON in the full reasoning
+                    m = re.search(r'\{[^{}]*"reply"[^}]*\}', reasoning)
                     if not m:
-                        m = re.search(r'\{[^{}]*\}', tail)
+                        m = re.search(r'\{[^{}]*\}', reasoning)
                     if m:
                         return m.group(0)
-                    return reasoning[-500:]
+                    # No JSON found → model failed to produce output, return empty
+                    return ""
                 return ""
             if _is_retryable(resp.status_code):
                 last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
