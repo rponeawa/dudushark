@@ -76,12 +76,12 @@ class OneBotClient:
         group_id = str(data.get("group_id", ""))
         message_id = str(data.get("message_id", ""))
 
-        text = self._extract_text(data.get("message", raw_message))
+        text, images = self._extract_text(data.get("message", raw_message))
         msg_obj = data.get("message")
         if isinstance(msg_obj, list) and any(isinstance(s, dict) and s.get("type") == "reply" for s in msg_obj):
             logger.info(f"[{self.bot_qq}] reply segment found: {msg_obj}")
 
-        if not text.strip():
+        if not text.strip() and not images:
             return
 
         if self._on_message:
@@ -94,13 +94,16 @@ class OneBotClient:
                 msg_type=msg_type,
                 message_id=message_id,
                 raw=data,
+                images=images,
             ))
 
-    def _extract_text(self, message) -> str:
+    def _extract_text(self, message) -> tuple[str, list[str]]:
+        """返回 (文本, 图片URL列表)。"""
         if isinstance(message, str):
-            return message
+            return message, []
         if isinstance(message, list):
             parts = []
+            images = []
             mentioned = False
             has_reply = False
             for seg in message:
@@ -112,21 +115,24 @@ class OneBotClient:
                         has_reply = True
                     elif t == "text":
                         parts.append(seg.get("data", {}).get("text", ""))
+                    elif t == "image":
+                        url = seg.get("data", {}).get("url", "")
+                        if url:
+                            images.append(url)
+                        parts.append("[图片]")
                 elif isinstance(seg, str):
                     parts.append(seg)
-            # 兜底：array 格式中 [CQ:reply,...] 也算引用
             text = "".join(parts)
             if not has_reply and isinstance(text, str) and text.startswith("[CQ:reply"):
                 has_reply = True
-                # 提取引用的实际文本（如果有的话）
                 import re as _re
                 text = _re.sub(r"\[CQ:reply[^\]]*\]", "", text).strip()
             if mentioned:
                 text = "@鱼 " + text
             elif has_reply:
                 text = "[回复鱼] " + text
-            return text
-        return str(message)
+            return text, images
+        return str(message), []
 
     async def _handle_notice(self, data: dict):
         logger.info(f"[{self.bot_qq}] notice: {data}")

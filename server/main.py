@@ -96,6 +96,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
             group_id=kwargs["group_id"],
             msg_type=kwargs["msg_type"],
             message_id=kwargs.get("message_id", ""),
+            images=kwargs.get("images", []),
         )
         if not replies:
             return

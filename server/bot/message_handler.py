@@ -205,7 +205,8 @@ class MessageHandler:
 
     async def handle(
         self, user_id: str, user_name: str, text: str,
-        group_id: str = "", msg_type: str = "private", message_id: str = ""
+        group_id: str = "", msg_type: str = "private", message_id: str = "",
+        images: list[str] | None = None,
     ) -> list[ReplyPart]:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
@@ -222,6 +223,8 @@ class MessageHandler:
             existing["names"].append(user_name)
             existing["user_ids"].append(user_id)
             existing["msg_ids"].append(message_id)
+            if images:
+                existing.setdefault("all_images", []).extend(images)
             fut: asyncio.Future = asyncio.get_event_loop().create_future()
             existing["futures"].append(fut)
             if existing.get("task") and not existing["task"].done():
@@ -239,6 +242,7 @@ class MessageHandler:
                 "msg_ids": [message_id],
                 "first_ts": now,
                 "futures": [fut],
+                "all_images": list(images) if images else [],
                 "task": asyncio.create_task(
                     self._flush_and_resolve(buf_key, group_id, user_id, user_name, is_group, merge_delay)
                 ),
@@ -261,6 +265,7 @@ class MessageHandler:
         names = buf.get("names", [user_name] * len(texts))
         user_ids_batch = buf.get("user_ids", [user_id] * len(texts))
         msg_ids = buf.get("msg_ids", [])
+        all_images = buf.get("all_images", [])
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
         # 合并消息用序号标注，让 LLM 知道每条消息的索引
@@ -273,7 +278,7 @@ class MessageHandler:
         async with self._lock:
             replies = await self._handle_impl(
                 user_id, user_name, combined, group_id, "group" if is_group else "private",
-                last_msg_id, names_map
+                last_msg_id, names_map, all_images
             )
 
         # 保存合并全文，供前端事件使用
@@ -290,6 +295,7 @@ class MessageHandler:
         self, user_id: str, user_name: str, text: str, group_id: str = "",
         msg_type: str = "private", quote_msg_id: str = "",
         names_map: dict[str, str] | None = None,
+        images: list[str] | None = None,
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
@@ -451,7 +457,14 @@ class MessageHandler:
                 break
         display_name = f"{clean_name}{role_tag}"
 
-        user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
+        # 多模态：有图片时使用 content 数组格式
+        if images:
+            content_parts = [{"type": "text", "text": f"{prefix}{display_name} 说: {text}"}]
+            for img_url in images[:3]:  # 最多3张图，避免 context 过大
+                content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
+            user_msg = {"role": "user", "content": content_parts}
+        else:
+            user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         self._append_history(user_id, "user", text, group_id)
 
         # 群聊 SKIP 预判：独立小 LLM 调用，判断是否值得回复
