@@ -476,8 +476,11 @@ class MessageHandler:
                 messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
 
         messages.append(user_msg)
-        # 记忆检查放在用户消息之后
-        messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
+        # 记忆检查 + relay 检查放在用户消息之后
+        if is_sender_admin:
+            messages.append({"role": "system", "content": "（relay: 对方明确要求你转达了吗？没有就null。日常闲聊不记memory。）"})
+        else:
+            messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
