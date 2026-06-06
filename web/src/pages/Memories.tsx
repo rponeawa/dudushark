@@ -147,6 +147,10 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
             ))}
           </select>
         </div>
+        <button className="btn-ghost btn-sm" style={{ marginBottom: 12, width: "100%" }}
+          onClick={() => { listMemoryUsers(activeQQ).then((d) => setUsers(d.users)).catch(() => setUsers([])); }}>
+          刷新列表
+        </button>
 
         <div className="tabs">
           <button className={tab === "personal" ? "active" : ""} onClick={() => setTab("personal")}>

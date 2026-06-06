@@ -92,6 +92,10 @@ export default function Conversations({ instances, activeQQ, setActiveQQ }: Prop
             ))}
           </select>
         </div>
+        <button className="btn-ghost btn-sm" style={{ marginBottom: 12, width: "100%" }}
+          onClick={() => { listConversations(activeQQ).then((d) => setConvoKeys(d.conversations)).catch(() => setConvoKeys([])); }}>
+          刷新列表
+        </button>
 
         <div className="tabs">
           <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>全部</button>
