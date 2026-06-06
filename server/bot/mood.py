@@ -25,8 +25,8 @@ _HOURLY_FLAVOR = {
 
 _SLEEP_FLAVOR = {
     "awake": "",
-    "sleepy": "",
-    "just_woke": "",
+    "sleepy": "你有点困了，说话会变得简短慵懒，反应慢半拍。",
+    "just_woke": "你刚睡醒，还有点迷迷糊糊的，说话带点慵懒和软绵绵的感觉。",
     "sleeping": "你正在睡觉，被吵醒了也迷迷糊糊的。回复要非常非常简短，不想说话。",
 }
 
