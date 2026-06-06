@@ -263,14 +263,18 @@ export default function Status() {
                 </span>
                 <span style={{
                   padding: "1px 6px", borderRadius: 3, fontSize: "0.7rem",
-                  background: evt.type === "message" ? "var(--accent-dim)" : "var(--bg-hover)",
-                  color: evt.type === "message" ? "var(--accent)" : "var(--text-dim)",
+                  background: evt.type === "relay" ? "var(--accent-dim)" : evt.type === "message" ? "var(--accent-dim)" : "var(--bg-hover)",
+                  color: evt.type === "relay" ? "var(--yellow)" : evt.type === "message" ? "var(--accent)" : "var(--text-dim)",
                   whiteSpace: "nowrap",
                 }}>
                   {evt.type}
                 </span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {evt.type === "message" ? `${evt.user_name}: ${(evt.text as string)?.slice(0, 60)} → ${(evt.reply as string)?.slice(0, 40)}` : `${evt.type} qq=${evt.qq}`}
+                  {evt.type === "relay"
+                    ? `${(evt as any).from_role} → ${(evt as any).to_role}: ${((evt as any).content as string)?.slice(0, 40)}`
+                    : evt.type === "message"
+                    ? `${(evt as any).user_name}: ${(evt.text as string)?.slice(0, 60)} → ${(evt.reply as string)?.slice(0, 40)}`
+                    : `${evt.type} qq=${evt.qq}`}
                 </span>
               </div>
             ))}

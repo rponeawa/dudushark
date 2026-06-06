@@ -794,6 +794,17 @@ class MessageHandler:
             if client and client.connected:
                 await client.send_private_msg(target_qq, relay_text)
                 logger.info(f"[{self.bot_qq}] Relay: {from_user_id}({from_role}) -> {target_qq}({to_role})")
+                # 推送到前端
+                try:
+                    from server.webui.routes import push_event
+                    await push_event({
+                        "type": "relay", "qq": self.bot_qq,
+                        "from_user": from_user_id, "from_role": from_role,
+                        "to_user": target_qq, "to_role": to_role,
+                        "content": content,
+                    })
+                except Exception:
+                    pass
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Relay failed: {e}")
 
