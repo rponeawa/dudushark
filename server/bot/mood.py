@@ -125,7 +125,7 @@ class DuduMood:
         # Dudu can randomly deviate from the baseline
         self.hourly_mood = max(0.0, min(1.0, baseline + self._mood_offset))
         sleep_mod = self._sleep_modifier()
-        self.energy = self.hourly_mood * sleep_mod
+        self.energy = min(1.0, self.hourly_mood * sleep_mod)
 
     def _refresh_offset(self, now: float):
         """Every 2-6 hours, Dudu re-decides how she feels about the current time."""
