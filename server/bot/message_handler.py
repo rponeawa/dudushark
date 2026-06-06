@@ -365,45 +365,7 @@ class MessageHandler:
         persona_text = PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc)
         messages = [{"role": "system", "content": persona_text}]
 
-        if mood_context:
-            messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
-
-        # 家族记忆：仅家族成员(role含"妈")私聊时注入
-        if _is_family and not is_group and self.cfg.family_memory:
-            messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
-
-        if diary_text:
-            diary_note = "（注意：你可以在对话中分享心情和感悟，但不能透露其中涉及的具体人名等隐私信息）"
-            messages.append({"role": "system", "content": "## 鱼的全局记忆（自己的经历和感受）\n" + diary_note + "\n" + diary_text})
-
-        if group_mem_text:
-            messages.append({"role": "system", "content": "## 关于这个群的记忆\n" + group_mem_text})
-
-        if memories_text:
-            # 附上已有记忆的标题列表，帮助 LLM 判断是否需要更新已有条目
-            existing_titles = []
-            for mem in self.memory.recall_all(user_id):
-                t = mem.get("text", "")
-                title_m = re.search(r"^# (.+)", t)
-                cat_m = re.search(r"类型: (.+)", t)
-                if title_m:
-                    existing_titles.append(f"{cat_m.group(1) if cat_m else '?'}/{title_m.group(1)}")
-            title_hint = ""
-            if existing_titles:
-                title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。）"
-            messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
-
-        history = self._get_history(user_id, group_id)
-        # 群聊用适度压缩，私聊用正常压缩
-        ctx = self.ctx
-        if is_group:
-            ctx = ContextManager(max_tokens=8000, reserve_for_reply=1500)
-        fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
-        # Take history parts from fit_result (skip its system msg since we already have prebuilt ones)
-        history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
-        messages.extend(history_msgs)
-
-        # JSON 格式指令
+        # JSON 格式指令 — 紧跟人设之后，最大化缓存命中
         json_prompt = (
             "【SKIP规则 - 最重要】先判断消息是否跟你有关。明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可一律不回，除非超级超级感兴趣。\n"
             "【记忆规则 - 同样重要】先判断是否值得记。对方说了重要的事（关键信息、性格、喜好、经历、约定），才记。日常聊天——打招呼、夸两句、道晚安、随口闲聊——这些都是正常对话，不是记忆。拿不准就别记。\n\n"
@@ -430,6 +392,41 @@ class MessageHandler:
         cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
         json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
         messages.append({"role": "system", "content": json_prompt})
+
+        # 动态上下文
+        if mood_context:
+            messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
+
+        if _is_family and not is_group and self.cfg.family_memory:
+            messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
+
+        if diary_text:
+            diary_note = "（注意：你可以在对话中分享心情和感悟，但不能透露其中涉及的具体人名等隐私信息）"
+            messages.append({"role": "system", "content": "## 鱼的全局记忆（自己的经历和感受）\n" + diary_note + "\n" + diary_text})
+
+        if group_mem_text:
+            messages.append({"role": "system", "content": "## 关于这个群的记忆\n" + group_mem_text})
+
+        if memories_text:
+            existing_titles = []
+            for mem in self.memory.recall_all(user_id):
+                t = mem.get("text", "")
+                title_m = re.search(r"^# (.+)", t)
+                cat_m = re.search(r"类型: (.+)", t)
+                if title_m:
+                    existing_titles.append(f"{cat_m.group(1) if cat_m else '?'}/{title_m.group(1)}")
+            title_hint = ""
+            if existing_titles:
+                title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。）"
+            messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
+
+        history = self._get_history(user_id, group_id)
+        ctx = self.ctx
+        if is_group:
+            ctx = ContextManager(max_tokens=8000, reserve_for_reply=1500)
+        fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
+        history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
+        messages.extend(history_msgs)
 
         # 家族提醒
         if _is_family and not is_group and self.cfg.family_note:
@@ -528,14 +525,20 @@ class MessageHandler:
         data = _parse_json(full_reply)
 
         # 处理 memory
-        def _save_memory(mem, uid):
+        async def _save_memory(mem, uid):
             if not mem or not isinstance(mem, dict):
                 return
+            action = mem.get("action", "save")
+            if action != "delete":
+                # 独立 LLM 预判是否真的值得记录
+                ok = await self._should_record_memory(mem, text)
+                if not ok:
+                    logger.info(f"[{self.bot_qq}] Memory pre-check skipped: {mem.get('category','')}/{mem.get('title','')}")
+                    return
             # 群聊中 LLM 可通过 user 字段指定记忆归属谁
             target_user = mem.get("user")
             if target_user and names_map and target_user in names_map:
                 uid = names_map[target_user]
-            action = mem.get("action", "save")
             cat = str(mem.get("category", "")).strip()
             title = str(mem.get("title", "")).strip()
             if not cat or not title:
@@ -591,10 +594,10 @@ class MessageHandler:
                 is_g = bool(group_id)
                 remind_final = final_data.get("remind")
                 if not (remind_final and isinstance(remind_final, dict)):
-                    _save_memory(final_data.get("memory"), user_id)
-                    _save_memory(final_data.get("diary"), "__diary__")
+                    await _save_memory(final_data.get("memory"), user_id)
+                    await _save_memory(final_data.get("diary"), "__diary__")
                     if is_g:
-                        _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
+                        await _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
                 if remind_final and isinstance(remind_final, dict):
                     self._save_remind(remind_final, user_id, group_id)
                 relay_final = final_data.get("relay")
@@ -647,13 +650,13 @@ class MessageHandler:
             remind_info = data.get("remind")
             # 有定时提醒时不再创建记忆，避免重复存储
             if not (remind_info and isinstance(remind_info, dict)):
-                _save_memory(data.get("memory"), user_id)
-                _save_memory(data.get("diary"), "__diary__")
+                await _save_memory(data.get("memory"), user_id)
+                await _save_memory(data.get("diary"), "__diary__")
                 if is_group:
-                    _save_memory(data.get("group_memory"), f"__group__{group_id}")
+                    await _save_memory(data.get("group_memory"), f"__group__{group_id}")
             forget_info = data.get("forget")
             if forget_info and isinstance(forget_info, dict):
-                _save_memory({**forget_info, "action": "delete"}, user_id)
+                await _save_memory({**forget_info, "action": "delete"}, user_id)
             if remind_info and isinstance(remind_info, dict):
                 self._save_remind(remind_info, user_id, group_id)
             relay_info = data.get("relay")
@@ -781,6 +784,30 @@ class MessageHandler:
             logger.info(f"[{self.bot_qq}] Reminder saved: at_utc={at_utc} for {user_id}")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Failed to save reminder: {e}")
+
+    async def _should_record_memory(self, mem: dict, text: str) -> bool:
+        """独立 LLM 判断是否真的值得记录这条记忆。"""
+        try:
+            llm = self.cfg.llm
+            cat = mem.get("category", "")
+            title = mem.get("title", "")
+            content = mem.get("content", "")
+            prompt = (
+                "你是记忆过滤器。判断这条信息是否真正值得记录。\n"
+                "值得记录：关键个人信息、重要经历、性格特点、约定承诺、强烈情感。\n"
+                "不值得记录：日常寒暄、随口闲聊、道晚安、夸两句、普通互动。\n"
+                "只输出 YES 或 NO。"
+            )
+            payload = {
+                "model": llm.model, "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"消息：{text[:200]}\n\n记忆：{cat}/{title} - {content[:200]}"},
+                ], "temperature": 0.1, "max_tokens": 5,
+            }
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
+            return "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
+        except Exception:
+            return True  # 出错时默认写（宁可多记不漏）
 
     async def _should_relay(self, text: str) -> bool:
         """独立 LLM 判断消息是否真的是转达请求。不提供任何上文。"""
