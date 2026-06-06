@@ -476,11 +476,7 @@ class MessageHandler:
                 messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
 
         messages.append(user_msg)
-        # 记忆检查 + relay 检查放在用户消息之后
-        if is_sender_admin:
-            messages.append({"role": "system", "content": "（relay: 对方明确要求你转达了吗？没有就null。日常闲聊不记memory。）"})
-        else:
-            messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
+        messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
         # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
         llm = self.cfg.llm
@@ -603,7 +599,8 @@ class MessageHandler:
                     self._save_remind(remind_final, user_id, group_id)
                 relay_final = final_data.get("relay")
                 if relay_final and isinstance(relay_final, dict) and is_sender_admin:
-                    asyncio.create_task(self._relay_message(relay_final, user_id))
+                    if await self._should_relay(text):
+                        asyncio.create_task(self._relay_message(relay_final, user_id))
 
                 from server.bot.onebot_handler import onebot_server
                 client = onebot_server.get_client(self.bot_qq)
@@ -661,7 +658,8 @@ class MessageHandler:
                 self._save_remind(remind_info, user_id, group_id)
             relay_info = data.get("relay")
             if relay_info and isinstance(relay_info, dict) and is_sender_admin:
-                asyncio.create_task(self._relay_message(relay_info, user_id))
+                if await self._should_relay(text):
+                    asyncio.create_task(self._relay_message(relay_info, user_id))
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -783,6 +781,27 @@ class MessageHandler:
             logger.info(f"[{self.bot_qq}] Reminder saved: at_utc={at_utc} for {user_id}")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Failed to save reminder: {e}")
+
+    async def _should_relay(self, text: str) -> bool:
+        """独立 LLM 判断消息是否真的是转达请求。不提供任何上文。"""
+        try:
+            llm = self.cfg.llm
+            prompt = (
+                "判断以下消息是否是一个明确的代传话请求。\n"
+                "代传话：对方说\"帮我告诉XX...\"、\"帮我转达给XX...\"、\"跟XX说...\"之类的话。\n"
+                "不是代传话：闲聊、问候、分享心情、自言自语、表达想念、说晚安。\n"
+                "只输出 YES 或 NO。"
+            )
+            payload = {
+                "model": llm.model, "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text[:300]},
+                ], "temperature": 0.1, "max_tokens": 5,
+            }
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
+            return "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
+        except Exception:
+            return False
 
     async def _relay_message(self, relay: dict, from_user_id: str):
         """代传话给另一位管理员。仅管理员之间可用。"""
