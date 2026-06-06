@@ -139,7 +139,10 @@ export default function Conversations({ instances, activeQQ, setActiveQQ }: Prop
             )}
           </h2>
           {selected && (
-            <button className="btn-danger btn-sm" onClick={handleClear}>清除</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn-ghost btn-sm" onClick={() => loadConvo(selected)}>刷新</button>
+              <button className="btn-danger btn-sm" onClick={handleClear}>清除</button>
+            </div>
           )}
         </div>
         {loading ? (

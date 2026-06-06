@@ -258,17 +258,20 @@ export default function Memories({ instances, activeQQ, setActiveQQ }: Props) {
               <div className="panel">
                 <div className="panel-header">
                   <h2>{memories.length} 条记忆</h2>
-                  <button
-                    className="btn-danger btn-sm"
-                    onClick={async () => {
-                      if (confirm("确定清空全部记忆？")) {
-                        await clearMemories(activeQQ, selectedUser);
-                        setMemories([]);
-                      }
-                    }}
-                  >
-                    清空
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn-ghost btn-sm" onClick={() => loadMemories(selectedUser)}>刷新</button>
+                    <button
+                      className="btn-danger btn-sm"
+                      onClick={async () => {
+                        if (confirm("确定清空全部记忆？")) {
+                          await clearMemories(activeQQ, selectedUser);
+                          setMemories([]);
+                        }
+                      }}
+                    >
+                      清空
+                    </button>
+                  </div>
                 </div>
                 {memories.length === 0 ? (
                   <div className="empty-state">暂无记忆</div>
