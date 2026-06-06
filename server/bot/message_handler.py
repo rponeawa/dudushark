@@ -736,7 +736,9 @@ class MessageHandler:
             ctx_lines = []
             for m in recent[-6:]:
                 role = "对方" if m.get("role") == "user" else "鱼"
-                ctx_lines.append(f"{role}: {m.get('content', '')[:80]}")
+                age = now_ts - m.get("ts", now_ts)
+                tag = "刚刚" if age < 60 else f"{int(age/60)}分钟前"
+                ctx_lines.append(f"[{tag}] {role}: {m.get('content', '')[:80]}")
             context = "\n".join(ctx_lines) if ctx_lines else "（暂无最近历史）"
 
             at_note = "（有人@鱼。但如果鱼在生气，或管理员在要求鱼SKIP/测试，可以不回。）" if mentioned else "（如果管理员要求鱼SKIP/测试，鱼应该配合不回。）"
