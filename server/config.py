@@ -41,7 +41,7 @@ class BotConfig(BaseModel):
     reply_split_max: int = 5
     group_reply_ratio: float = 0.25
     private_merge_delay: float = 7.0
-    group_merge_delay: float = 8.0
+    group_merge_delay: float = 9.0
     napcat_webui_port: int = 6099
     onebot_ws_port: int = 8080
     # Proactive messaging
