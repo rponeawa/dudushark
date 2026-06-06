@@ -441,8 +441,8 @@ class MessageHandler:
             role_list = "、".join(admin_roles) if admin_roles else "无"
             messages.append({"role": "system", "content": (
                 f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
-                "例-小妈说\"帮我告诉妈妈明天去看她\"→{\"reply\":\"好的～鱼这就去告诉妈妈，啊呜～\",\"relay\":{\"to_role\":\"妈妈\",\"content\":\"小妈说明天去看你\"}}\n"
-                "只有\"帮我告诉XX / 帮我转达给XX / 跟XX说\"才触发。\"想XX了\"\"XX最近怎样\"这类不是转达，不要用 relay。"
+                "例-小妈说\"帮我告诉妈妈明天去看她\"→{\"reply\":\"好的～\",\"relay\":{\"to_role\":\"妈妈\",\"content\":\"小妈说明天去看你\"}}\n"
+                "只有对方明确说\"帮我告诉XX/帮我转达给XX/跟XX说\"才触发。绝对不要主动转达。不确定该不该转达就不要转达。"
             )})
 
         prefix = "[群聊]" if is_group else ""
