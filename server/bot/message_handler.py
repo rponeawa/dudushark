@@ -178,11 +178,20 @@ class MessageHandler:
                         msgs.append(json.loads(line))
                 if msgs:
                     self._conversations[key] = msgs
-                    # 从消息内容检测对话类型
-                    is_group = any(
-                        "[群聊]" in m.get("content", "") or "[1]" in m.get("content", "")
-                        for m in msgs
-                    )
+                    # 检测对话类型：群聊的合并消息包含多个不同说话人
+                    import re as _re
+                    is_group = False
+                    for m in msgs:
+                        if m.get("role") != "user":
+                            continue
+                        content = m.get("content", "")
+                        names = set(_re.findall(r"\[\d+\]\s*([^:]+):", content))
+                        if len(names) > 1:
+                            is_group = True
+                            break
+                    if not is_group:
+                        self._convo_types[key] = "private"
+                        continue
                     self._convo_types[key] = "group" if is_group else "private"
             except Exception:
                 pass
