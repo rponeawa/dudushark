@@ -122,6 +122,7 @@ class MessageHandler:
         self.memory = get_memory_manager(bot_qq)
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
         self._conversations: dict[str, list[dict]] = {}
+        self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
         self._lock = asyncio.Lock()
         # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
         self._buffers: dict[tuple[str, str], dict] = {}
@@ -140,6 +141,7 @@ class MessageHandler:
         key = self._conv_key(user_id, group_id)
         if key not in self._conversations:
             self._conversations[key] = []
+        self._convo_types[key] = "group" if group_id else "private"
         self._conversations[key].append({
             "role": role,
             "content": content,
@@ -736,6 +738,7 @@ class MessageHandler:
     def clear_conversation(self, user_id: str = "", group_id: str = "", key: str = ""):
         k = key if key else self._conv_key(user_id, group_id)
         self._conversations.pop(k, None)
+        self._convo_types.pop(k, None)
         try:
             f = self._convo_file(k)
             if f.exists():

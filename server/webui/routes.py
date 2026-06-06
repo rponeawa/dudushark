@@ -358,13 +358,10 @@ async def update_config(qq: str, body: ConfigUpdate):
 @router.get("/instances/{qq}/conversations")
 async def list_conversations(qq: str):
     handler = get_message_handler(qq)
-    # 返回带类型的对话列表：检查消息内容区分群聊/私聊
     result = []
     for key in handler.list_conversations():
-        msgs = handler.get_conversation(key=key)
-        # 群聊消息中包含合并标记 [1] name: text
-        is_group = any("[1]" in m.get("content", "") for m in msgs) or len(key) >= 6
-        result.append({"key": key, "type": "group" if is_group else "private"})
+        ctype = handler._convo_types.get(key, "private")
+        result.append({"key": key, "type": ctype})
     return {"conversations": result}
 
 
