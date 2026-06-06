@@ -349,7 +349,7 @@ class MessageHandler:
                     if any(str(a.get("qq", "")) == uid and "妈" in str(a.get("role", "")) for a in self.cfg.admins):
                         _is_family = True
                     break
-        admin_desc = self.cfg.admins_description if is_sender_admin else ""
+        admin_desc = self.cfg.admins_description if (is_sender_admin and not is_group) else ""
         persona_text = PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc)
         messages = [{"role": "system", "content": persona_text}]
 
