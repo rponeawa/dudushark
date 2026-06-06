@@ -326,7 +326,8 @@ button, .btn {
 
 /* ---- Two-column layout ---- */
 
-.two-col { display: grid; grid-template-columns: 250px 1fr; gap: 14px; align-items: start; }
+.two-col { display: grid; grid-template-columns: 250px 1fr; gap: 14px; }
+.two-col > .panel { height: 100%; }
 .two-col-side { position: sticky; top: 72px; }
 
 /* ---- Section header (no subtitle) ---- */
