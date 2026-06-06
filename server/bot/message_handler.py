@@ -732,9 +732,19 @@ class MessageHandler:
             persona_brief = "嘟嘟鲨鱼是一只来自鲨鱼星的赛博大鲨鱼QQ机器人。自称\"鱼\"，口头禅\"啊呜～\"。傲娇、善良、喜欢睡觉、喜欢软绵绵的东西。在群里大部分时候安静看着，只有真的感兴趣才开口。但如果对方做了冒犯的事让她生气了，她会记仇——就算被@也不想理那个讨厌的人类。"
             history = self._get_history("", group_id, max_len=8)
             ctx_lines = []
+            now_ts = time.time()
             for m in history[-6:]:
                 role = "对方" if m.get("role") == "user" else "鱼"
-                ctx_lines.append(f"{role}: {m.get('content', '')[:80]}")
+                age = now_ts - m.get("ts", now_ts)
+                if age < 60:
+                    time_tag = "刚刚"
+                elif age < 3600:
+                    time_tag = f"{int(age/60)}分钟前"
+                elif age < 86400:
+                    time_tag = f"{int(age/3600)}小时前"
+                else:
+                    time_tag = f"{int(age/86400)}天前"
+                ctx_lines.append(f"[{time_tag}] {role}: {m.get('content', '')[:80]}")
             context = "\n".join(ctx_lines) if ctx_lines else "（暂无历史）"
 
             at_note = "（有人@鱼。但如果鱼在生气，或管理员在要求鱼SKIP/测试，可以不回。）" if mentioned else "（如果管理员要求鱼SKIP/测试，鱼应该配合不回。）"
