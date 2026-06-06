@@ -588,11 +588,12 @@ class MessageHandler:
                     return
                 q = final_data.get("quote", False)
                 is_g = bool(group_id)
-                _save_memory(final_data.get("memory"), user_id)
-                _save_memory(final_data.get("diary"), "__diary__")
-                if is_g:
-                    _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
                 remind_final = final_data.get("remind")
+                if not (remind_final and isinstance(remind_final, dict)):
+                    _save_memory(final_data.get("memory"), user_id)
+                    _save_memory(final_data.get("diary"), "__diary__")
+                    if is_g:
+                        _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
                 if remind_final and isinstance(remind_final, dict):
                     self._save_remind(remind_final, user_id, group_id)
                 relay_final = final_data.get("relay")
@@ -641,14 +642,16 @@ class MessageHandler:
         if data:
             reply_text = data.get("reply", "")
             want_quote = data.get("quote", False)
-            _save_memory(data.get("memory"), user_id)
-            _save_memory(data.get("diary"), "__diary__")
-            if is_group:
-                _save_memory(data.get("group_memory"), f"__group__{group_id}")
+            remind_info = data.get("remind")
+            # 有定时提醒时不再创建记忆，避免重复存储
+            if not (remind_info and isinstance(remind_info, dict)):
+                _save_memory(data.get("memory"), user_id)
+                _save_memory(data.get("diary"), "__diary__")
+                if is_group:
+                    _save_memory(data.get("group_memory"), f"__group__{group_id}")
             forget_info = data.get("forget")
             if forget_info and isinstance(forget_info, dict):
                 _save_memory({**forget_info, "action": "delete"}, user_id)
-            remind_info = data.get("remind")
             if remind_info and isinstance(remind_info, dict):
                 self._save_remind(remind_info, user_id, group_id)
             relay_info = data.get("relay")
