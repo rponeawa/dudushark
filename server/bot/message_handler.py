@@ -408,11 +408,11 @@ class MessageHandler:
         json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
         messages.append({"role": "system", "content": json_prompt})
 
-        # 家族提醒：note 放在 JSON 指令之后、用户消息之前，确保模型注意到
+        # 家族提醒
         if _is_family and not is_group and self.cfg.family_note:
             messages.append({"role": "system", "content": self.cfg.family_note})
 
-        # 管理员代传话：仅在发送者是管理员时告知此能力
+        # 管理员代传话
         if is_sender_admin and not is_group:
             admin_roles = [a.get("role","") for a in self.cfg.admins if a.get("role")]
             role_list = "、".join(admin_roles) if admin_roles else "无"
@@ -423,11 +423,9 @@ class MessageHandler:
             )})
 
         prefix = "[群聊]" if is_group else ""
-        # 检测是否 @了鱼 或引用了鱼的发言（合并消息里任意一条命中就算）
         mentioned = is_group and ("@鱼" in text or "[回复鱼]" in text)
         if mentioned:
             prefix += "[有人@鱼]"
-        # 过滤掉用户名里伪造的【】标签，再根据 QQ 号匹配真实角色
         clean_name = re.sub(r"【[^】]*】", "", user_name).strip()
         role_tag = ""
         for a in self.cfg.admins:
@@ -435,17 +433,14 @@ class MessageHandler:
                 role_tag = f"【{a.get('role', '?')}】"
                 break
         display_name = f"{clean_name}{role_tag}"
-        # 群聊最终 SKIP 检查
-        if is_group:
-            if mentioned:
-                messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
-            else:
-                messages.append({"role": "system", "content": "（判断：消息是回复你刚才说的话，或明确跟你有关吗？是就回。模棱两可、不确定、路人闲聊，全部[SKIP]。超级感兴趣除外。）"})
-
-        # 记忆最终检查：放在用户消息之前，类似 SKIP 检查
-        messages.append({"role": "system", "content": "（这轮对话有什么真正值得记的事吗？日常寒暄、随口闲聊不算。没有就memory/diary全部null。）"})
 
         user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
+        messages.append(user_msg)
+
+        # SKIP + 记忆检查放在用户消息之后、紧贴用户消息，确保 LLM 最后看到
+        if is_group and not mentioned:
+            messages.append({"role": "system", "content": "（以上是群聊消息。不是跟你说话的就SKIP。不确定就SKIP。）"})
+        messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
         messages.append(user_msg)
         self._append_history(user_id, "user", text, group_id)
 
