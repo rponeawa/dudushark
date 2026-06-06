@@ -464,13 +464,8 @@ class MessageHandler:
             user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         self._append_history(user_id, "user", text, group_id)
 
-        # 群聊 SKIP 预判：独立小 LLM 调用，判断是否值得回复
-        if is_group:
-            skip_check = await self._should_skip_group(text, group_id, mentioned)
-            if skip_check:
-                return []
-            if mentioned:
-                messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
+        if is_group and mentioned:
+            messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
 
         messages.append(user_msg)
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
@@ -590,6 +585,10 @@ class MessageHandler:
                 reply_txt = final_data.get("reply", "") if final_data else ""
                 if not reply_txt or reply_txt.strip() == "[SKIP]":
                     return
+                if is_g and not mentioned:
+                    override = await self._should_skip_group(text, group_id, False)
+                    if override:
+                        return
                 q = final_data.get("quote", False)
                 is_g = bool(group_id)
                 remind_final = final_data.get("remind")
@@ -676,6 +675,13 @@ class MessageHandler:
 
         if not reply_text or reply_text.strip() == "[SKIP]":
             return []
+
+        # 群聊二次验证：主 LLM 决定回复后，独立 LLM 用上下文最终确认
+        if is_group and not mentioned:
+            override = await self._should_skip_group(text, group_id, False)
+            if override:
+                logger.info(f"[{self.bot_qq}] Post-reply SKIP override for {group_id}")
+                return []
 
         # JSON 解析失败时，异步提取记忆（兜底），短超时不影响回复
         if not data and reply_text and len(reply_text) > 10:
