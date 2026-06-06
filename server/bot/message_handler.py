@@ -438,12 +438,12 @@ class MessageHandler:
         self._append_history(user_id, "user", text, group_id)
 
         # 群聊 SKIP 预判：独立小 LLM 调用，判断是否值得回复
-        if is_group and not mentioned:
-            skip_check = await self._should_skip_group(text, group_id)
+        if is_group:
+            skip_check = await self._should_skip_group(text, group_id, mentioned)
             if skip_check:
                 return []
-        elif is_group and mentioned:
-            messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
+            if mentioned:
+                messages.append({"role": "system", "content": "（有人@了你，应该回复一下。）"})
 
         messages.append(user_msg)
         # 记忆检查放在用户消息之后
@@ -684,27 +684,39 @@ class MessageHandler:
         self.cfg = get_instance_config(self.bot_qq)
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
 
-    async def _should_skip_group(self, text: str, group_id: str = "") -> bool:
+    async def _should_skip_group(self, text: str, group_id: str = "", mentioned: bool = False) -> bool:
         """独立小 LLM 判断群聊消息是否值得回复。True=跳过, False=回复。"""
         try:
             llm = self.cfg.llm
+            persona_brief = "嘟嘟鲨鱼是一只来自鲨鱼星的赛博大鲨鱼QQ机器人。自称\"鱼\"，口头禅\"啊呜～\"。傲娇、善良、喜欢睡觉、喜欢软绵绵的东西。在群里大部分时候安静看着，只有真的感兴趣才开口。但如果对方做了冒犯的事让她生气了，她会记仇——就算被@也不想理那个讨厌的人类。"
+            history = self._get_history("", group_id, max_len=8)
+            ctx_lines = []
+            for m in history[-6:]:
+                role = "对方" if m.get("role") == "user" else "鱼"
+                ctx_lines.append(f"{role}: {m.get('content', '')[:80]}")
+            context = "\n".join(ctx_lines) if ctx_lines else "（暂无历史）"
+
+            at_note = "（注意：这条消息有人@了鱼，但鱼如果正在生这个人的气，仍然可以不回。）" if mentioned else ""
             prompt = (
-                "你是群聊消息过滤器。判断嘟嘟鲨鱼是否应该回复以下群聊消息。\n"
-                "回复 YES 的情况：消息极其有趣、让鱼超级感兴趣、在认真求助、话题是鲨鱼/海洋/睡觉/软绵绵/科技。\n"
-                "回复 NO 的情况：日常闲聊、寒暄、路人对话、不感兴趣的话题、模棱两可不确定是否跟鱼有关。\n"
-                "只输出 YES 或 NO，不要解释。"
+                f"{persona_brief}\n\n"
+                "你是过滤器。鱼在群里非常安静，绝大多数时候都不说话。请严格判断她是否应该回复。\n"
+                "回复 YES（极少）：消息极其有趣让鱼忍不住想插嘴、有人在认真求助需要帮忙、话题正是鲨鱼/海洋/睡觉/软绵绵/科技、或者是明确跟鱼说话且鱼没有生气。\n"
+                "回复 NO（默认）：以上情况之外的一切——日常闲聊、寒暄、路人对话、不感兴趣、不确定跟鱼有没有关系、鱼在生这个人的气。\n"
+                "拿不准一律 NO。鱼的回复非常珍贵，不能随便开口。\n"
+                f"{at_note}\n"
+                "只输出 YES 或 NO。"
             )
             payload = {
                 "model": llm.model, "messages": [
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": text[:500]},
+                    {"role": "user", "content": f"最近对话：\n{context}\n\n新消息：\n{text[:500]}"},
                 ], "temperature": 0.3, "max_tokens": 5,
             }
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
             result = raw.strip().upper()
             return "NO" in result and "YES" not in result
         except Exception:
-            return False  # 出错时默认不跳过（宁可多回不漏）
+            return False
 
     def _save_remind(self, remind: dict, user_id: str, group_id: str = ""):
         """保存一次性定时提醒到 reminders.json。"""
