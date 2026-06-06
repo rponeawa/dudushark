@@ -107,12 +107,16 @@ class DuduMood:
     def _full_update(self, now: float):
         self._last_update = now
         hour = self._hour()
-        # 深夜 0-7 点固定为睡眠状态
+        # 深夜 0-7 点固定为睡眠状态，22-24 固定为困了
         if 0 <= hour < 7:
             self.sleep_state = "sleeping"
             self.sleep_state_until = now + 3600
-            self._mood_offset = -0.3
             self.energy = 0.05
+            return
+        if hour >= 22:
+            self.sleep_state = "sleepy"
+            self.sleep_state_until = now + 1800
+            self.energy = 0.08
             return
         self._refresh_offset(now)
         self._tick_sleep(now)
