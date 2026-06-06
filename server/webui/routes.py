@@ -158,7 +158,7 @@ async def system_status():
         instances_status.append({
             "qq": qq,
             "connected": client.connected if client else False,
-            "napcat_running": napcat.is_running if napcat else False,
+            "napcat_running": (napcat and napcat.is_running) or (client and client.connected),
             "conversation_count": convos,
             "memory_users": len(memory_users),
         })
@@ -190,7 +190,7 @@ async def list_instances():
         instances.append(InstanceInfo(
             qq=qq,
             connected=client.connected if client else False,
-            napcat_running=napcat.is_running if napcat else False,
+            napcat_running=(napcat and napcat.is_running) or (client and client.connected),
         ))
     return {"instances": [i.model_dump() for i in instances], "current": cfg.get("current_instance")}
 
@@ -213,7 +213,7 @@ async def instance_detail_status(qq: str):
     return {
         "qq": qq,
         "connected": client.connected if client else False,
-        "napcat_running": napcat.is_running if napcat else False,
+        "napcat_running": (napcat and napcat.is_running) or (client and client.connected),
         "napcat_webui_port": napcat.webui_port if napcat else 6099,
         "onebot_ws_port": napcat.ws_port if napcat else 8080,
         "conversation_count": len(handler.list_conversations()),

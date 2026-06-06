@@ -125,6 +125,7 @@ class MessageHandler:
         self._lock = asyncio.Lock()
         # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
         self._buffers: dict[tuple[str, str], dict] = {}
+        self._last_combined: dict[str, str] = {}  # conv_key -> 最近一次合并的全文
         self._load_conversations()
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
@@ -265,6 +266,10 @@ class MessageHandler:
                 last_msg_id, names_map
             )
 
+        # 保存合并全文，供前端事件使用
+        conv_key = self._conv_key(user_id, group_id)
+        if len(texts) > 1:
+            self._last_combined[conv_key] = combined
         # LLM 调用完成后才 pop，避免期间新消息开新 buffer
         self._buffers.pop(buf_key, None)
         for i, f in enumerate(futures):
@@ -737,6 +742,10 @@ class MessageHandler:
                 f.unlink()
         except Exception:
             pass
+
+    def pop_last_combined(self, conv_key: str) -> str | None:
+        """取出并清除最近一次合并的全文。"""
+        return self._last_combined.pop(conv_key, None)
 
     def list_conversations(self) -> list[str]:
         return list(self._conversations.keys())

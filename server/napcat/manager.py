@@ -204,7 +204,20 @@ class NapCatInstance:
     def is_running(self) -> bool:
         if self.process is True:
             return True
-        return self.process is not None and self.process.poll() is None
+        if self.process is not None and self.process.poll() is None:
+            return True
+        # Docker: check if napcat container is running
+        import shutil
+        if shutil.which("docker"):
+            try:
+                import subprocess as _sp
+                # Try without sudo first, then with sudo stdin
+                r = _sp.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True, timeout=5)
+                if "napcat" in r.stdout:
+                    return True
+            except Exception:
+                pass
+        return False
 
     async def get_qr_code(self) -> str | None:
         """尝试通过 NapCatQQ WebUI API 获取二维码。"""

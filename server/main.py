@@ -130,13 +130,15 @@ async def onebot_ws(ws: WebSocket, qq: str):
             except Exception as e:
                 logger.error(f"发送消息失败: {e}")
 
+        conv_key = handler._conv_key(kwargs["user_id"], kwargs["group_id"])
+        merged_text = handler.pop_last_combined(conv_key)
         await push_event({
             "type": "message",
             "qq": kwargs["bot_qq"],
             "user_id": kwargs["user_id"],
             "user_name": kwargs["user_name"],
             "group_id": kwargs["group_id"],
-            "text": kwargs["text"],
+            "text": merged_text or kwargs["text"],
             "reply": "\n---\n".join(p.text for p in replies),
             "quoted": any(p.quote_msg_id for p in replies),
             "target": target,
