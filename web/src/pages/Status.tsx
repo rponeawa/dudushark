@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, getReminders, SystemStatus, InstanceDetailStatus, MoodState, Reminder } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, SystemStatus, InstanceDetailStatus, MoodState, Reminder } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -69,6 +69,7 @@ export default function Status() {
   const [detailQQ, setDetailQQ] = useState<string>("");
   const [detail, setDetail] = useState<InstanceDetailStatus | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [pausedGroups, setPausedGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = async () => {
@@ -104,11 +105,22 @@ export default function Status() {
   useEffect(() => {
     if (!detailQQ) return;
     getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => setReminders([]));
+    getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups)).catch(() => setPausedGroups([]));
     const t = setInterval(() => {
       getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => {});
+      getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups)).catch(() => {});
     }, 5000);
     return () => clearInterval(t);
   }, [detailQQ]);
+
+  const handlePause = async (group_id: string) => {
+    await pauseGroup(detailQQ, group_id);
+    getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups));
+  };
+  const handleResume = async (group_id: string) => {
+    await resumeGroup(detailQQ, group_id);
+    getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups));
+  };
 
   if (loading) return <div className="empty-state">加载中...</div>;
 
@@ -307,6 +319,25 @@ export default function Status() {
           </div>
         </div>
       )}
+
+      {/* Paused Groups */}
+      <div className="panel">
+        <div className="panel-header">
+          <h2>暂停的群聊</h2>
+        </div>
+        <div className="panel-body">
+          {pausedGroups.length === 0 ? (
+            <div className="empty-state">无暂停的群聊</div>
+          ) : (
+            pausedGroups.map((gid) => (
+              <div key={gid} className="card" style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontFamily: "monospace" }}>{gid}</span>
+                <button className="btn" onClick={() => handleResume(gid)}>恢复</button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

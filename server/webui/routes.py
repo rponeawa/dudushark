@@ -237,6 +237,31 @@ async def get_reminders(qq: str):
     return {"reminders": [{"at_utc": r["at_utc"], "content": r["content"], "user_id": r["user_id"], "group_id": r.get("group_id", "")} for r in reminders]}
 
 
+@router.get("/instances/{qq}/paused_groups")
+async def get_paused_groups(qq: str):
+    """获取暂停的群列表。"""
+    handler = get_message_handler(qq)
+    return {"paused_groups": list(handler._paused_groups)}
+
+
+@router.post("/instances/{qq}/paused_groups/{group_id}/pause")
+async def pause_group(qq: str, group_id: str):
+    """暂停群消息处理。"""
+    handler = get_message_handler(qq)
+    handler._paused_groups.add(group_id)
+    logger.info(f"[{qq}] WebUI paused group {group_id}")
+    return {"ok": True}
+
+
+@router.post("/instances/{qq}/paused_groups/{group_id}/resume")
+async def resume_group(qq: str, group_id: str):
+    """恢复群消息处理。"""
+    handler = get_message_handler(qq)
+    handler._paused_groups.discard(group_id)
+    logger.info(f"[{qq}] WebUI resumed group {group_id}")
+    return {"ok": True}
+
+
 @router.post("/instances/create")
 async def create_instance(qq: str, napcat_path: str = ""):
     cfg = load_global_config()

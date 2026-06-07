@@ -165,3 +165,6 @@ export const clearMemories = (qq: string, userId: string) =>
 
 export interface Reminder { at_utc: number; content: string; user_id: string; group_id: string; }
 export const getReminders = (qq: string) => req<{ reminders: Reminder[] }>(`/instances/${qq}/reminders`);
+export const getPausedGroups = (qq: string) => req<{ paused_groups: string[] }>(`/instances/${qq}/paused_groups`);
+export const pauseGroup = (qq: string, group_id: string) => req<{ ok: boolean }>(`/instances/${qq}/paused_groups/${group_id}/pause`, { method: "POST" });
+export const resumeGroup = (qq: string, group_id: string) => req<{ ok: boolean }>(`/instances/${qq}/paused_groups/${group_id}/resume`, { method: "POST" });
