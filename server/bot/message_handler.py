@@ -437,6 +437,7 @@ class MessageHandler:
             for uid in (names_map.values() if names_map else [])
         )
         if _qzone_admin and "空间" in text:
+         try:
             _qzone_check_prompt = (
                 "判断用户是否在要求机器人发 QQ 空间说说。"
                 "只有明确要求发空间/发说说/发动态才返回 YES，否则返回 NO。\n"
@@ -581,6 +582,9 @@ class MessageHandler:
                             await _qzone_client.send_private_msg(user_id, f"啊呜...发空间失败了: {_msg}")
                     return []
             # 不匹配意图则继续正常对话流程
+         except Exception as _qzone_err:
+             logger.error(f"[{self.bot_qq}] Qzone post flow error: {_qzone_err}")
+             # 出错回退到正常对话流程
 
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
         _is_family = any(
