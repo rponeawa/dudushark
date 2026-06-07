@@ -120,7 +120,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
                     import base64, os, uuid
                     audio_bytes = await handler._tts_speak(text, part.voice_emotion)
                     if audio_bytes:
-                        tts_dir = "/home/hsinli/napcat/config/tts"
+                        tts_dir = handler.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
                         os.makedirs(tts_dir, exist_ok=True)
                         fname = f"{uuid.uuid4().hex[:8]}.wav"
                         host_path = os.path.join(tts_dir, fname)

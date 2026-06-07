@@ -6,6 +6,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -383,7 +384,7 @@ class MessageHandler:
                 audio = await self._tts_speak(say_text, say_emotion)
                 if audio:
                     import os, uuid
-                    tts_dir = "/home/hsinli/napcat/config/tts"
+                    tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
                     os.makedirs(tts_dir, exist_ok=True)
                     fname = f"{uuid.uuid4().hex[:8]}.wav"
                     with open(os.path.join(tts_dir, fname), "wb") as f:

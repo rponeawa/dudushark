@@ -53,12 +53,15 @@ start_napcat_docker() {
     fi
 
     info "首次启动 NapCatQQ Docker 容器..."
-    mkdir -p "$HOME/NapCatQQ/config" "$HOME/NapCatQQ/plugins"
+    NAPCAT_DIR="$HOME/napcat"
+    mkdir -p "$NAPCAT_DIR/config" "$NAPCAT_DIR/plugins"
+    # TTS 语音文件共享目录
+    mkdir -p "$NAPCAT_DIR/config/tts"
 
     docker run -d \
         -p 6099:6099 \
-        -v "$HOME/NapCatQQ/config:/app/napcat/config" \
-        -v "$HOME/NapCatQQ/plugins:/app/napcat/plugins" \
+        -v "$NAPCAT_DIR/config:/app/napcat/config" \
+        -v "$NAPCAT_DIR/plugins:/app/napcat/plugins" \
         --name "$NAPCAT_CONTAINER" \
         --restart=always \
         "$NAPCAT_IMAGE"
