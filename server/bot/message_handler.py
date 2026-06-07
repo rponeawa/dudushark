@@ -523,10 +523,16 @@ class MessageHandler:
         if is_sender_admin and not is_group:
             admin_roles = [a.get("role","") for a in self.cfg.admins if a.get("role")]
             role_list = "、".join(admin_roles) if admin_roles else "无"
+            # 用实际角色名构建示例，避免硬编码泄露隐私到 GitHub
+            relay_example = ""
+            if len(admin_roles) >= 2:
+                a, b = admin_roles[0], admin_roles[1]
+                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}说明天去看你\",\"voice\":null,\"voice_emotion\":null}}}}"
             messages.append({"role": "system", "content": (
                 f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
                 "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null}\n"
-                "voice: 转达时也可以发语音。大部分时候null。撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n"
+                "voice: 转达时也可以发语音。大部分时候null。撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n" +
+                (f"{relay_example}\n" if relay_example else "") +
                 "只有对方明确说\"帮我告诉XX/帮我转达给XX/跟XX说\"才触发。绝对不要主动转达。不确定该不该转达就不要转达。"
             )})
 
