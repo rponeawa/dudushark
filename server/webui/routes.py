@@ -312,7 +312,7 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
                 {
                     "model": handler.cfg.llm.model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
+                    "max_tokens": 600,
                     "temperature": 0.9,
                 },
             )
