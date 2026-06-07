@@ -354,13 +354,13 @@ class ProactiveScheduler:
 
         from server.qzone import QzoneClient
         qzone = QzoneClient(self.bot_qq)
-        ok = await qzone.publish_post(content)
+        ok, msg = await qzone.publish_post(content)
         if ok:
             await self._save_qzone_post(content)
             self._mark_qzone_posted()
             logger.info(f"[{self.bot_qq}] Qzone auto-posted: {content[:50]}")
         else:
-            logger.warning(f"[{self.bot_qq}] Qzone auto-post failed, will retry next cycle")
+            logger.warning(f"[{self.bot_qq}] Qzone auto-post failed ({msg}), will retry next cycle")
 
     # ── main cycle ─────────────────────────────────────────
 

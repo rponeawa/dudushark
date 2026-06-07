@@ -327,7 +327,7 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         raise HTTPException(500, "生成内容为空")
 
     qzone = QzoneClient(qq)
-    ok = await qzone.publish_post(content)
+    ok, msg = await qzone.publish_post(content)
     if ok:
         # 保存到本地
         from server.config import get_qzone_posts_path
@@ -345,7 +345,7 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         logger.info(f"[{qq}] WebUI manual Qzone post: {content[:50]}")
         return {"ok": True, "content": content}
     else:
-        raise HTTPException(500, "发帖失败，可能是 Cookie 获取失败或网络问题")
+        raise HTTPException(500, f"发帖失败: {msg}")
 
 
 @router.post("/instances/create")

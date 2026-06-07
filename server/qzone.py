@@ -90,23 +90,20 @@ class QzoneClient:
         self.gtk = _calc_gtk(skey)
         return True
 
-    async def publish_post(self, content: str) -> bool:
+    async def publish_post(self, content: str) -> tuple[bool, str]:
         """发一条说说。
 
-        Args:
-            content: 说说文本内容
         Returns:
-            True if posted successfully
+            (success, message)
         """
         from server.bot.onebot_handler import onebot_server
 
         ob_client = onebot_server.get_client(self.bot_qq)
         if not ob_client or not ob_client.connected:
-            logger.warning(f"[{self.bot_qq}] NapCat not connected, cannot post to Qzone")
-            return False
+            return False, "NapCat 未连接"
 
         if not await self._init_session(ob_client):
-            return False
+            return False, "Cookie 获取失败"
 
         params = urlencode({
             "syn_tweet_verson": "1",
@@ -142,20 +139,17 @@ class QzoneClient:
                 # Find the last JSON object in the response
                 json_match = _re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw)
                 if not json_match:
-                    logger.error(f"[{self.bot_qq}] Qzone response has no JSON object: {raw[:300]}")
-                    return False
+                    return False, f"响应无 JSON: {raw[:200]}"
                 # Take the last (deepest) JSON match — that's the actual data
                 data = json.loads(json_match[-1])
                 code = data.get("code", -1)
                 if code == 0:
                     logger.info(f"[{self.bot_qq}] Qzone post OK: {content[:50]}...")
-                    return True
+                    return True, "ok"
                 else:
-                    logger.error(f"[{self.bot_qq}] Qzone post failed: code={code}, msg={data.get('message', '')}")
-                    return False
+                    return False, f"code={code} msg={data.get('message', '')} raw={json_match[-1][:200]}"
         except Exception as e:
-            logger.error(f"[{self.bot_qq}] Qzone publish error: {e}")
-            return False
+            return False, f"异常: {e}"
 
     async def get_posts(self, num: int = 20, pos: int = 0) -> list[dict]:
         """获取说说列表。
