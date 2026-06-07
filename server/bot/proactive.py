@@ -280,6 +280,8 @@ class ProactiveScheduler:
 
     async def _generate_qzone_content(self) -> str | None:
         """用 LLM 生成一条空间说说内容。基于今天的 diary 或随机。"""
+        from server.bot.message_handler import _call_llm
+
         handler = get_message_handler(self.bot_qq)
         today_diary = handler.memory.recall_by_date("__diary__", self._today_str())
 
@@ -290,12 +292,18 @@ class ProactiveScheduler:
             diary_section = "## 今天\n今天没有什么特别的事发生。随便写点什么吧～"
 
         prompt = self.QZONE_PROMPT.format(diary_section=diary_section)
+        cfg = handler.cfg
 
         try:
-            resp = await handler._call_llm(
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.9,
+            resp = await _call_llm(
+                cfg.llm.base_url,
+                cfg.llm.api_key,
+                {
+                    "model": cfg.llm.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.9,
+                },
             )
             text = resp.strip()
             # 去掉可能的引号包裹

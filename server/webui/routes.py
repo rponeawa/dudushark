@@ -305,10 +305,16 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
             diary_section = "## 今天\n今天没有什么特别的事发生。随便写点什么吧～"
         prompt = sched_cls.QZONE_PROMPT.format(diary_section=diary_section)
         try:
-            resp = await handler._call_llm(
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.9,
+            from server.bot.message_handler import _call_llm
+            resp = await _call_llm(
+                handler.cfg.llm.base_url,
+                handler.cfg.llm.api_key,
+                {
+                    "model": handler.cfg.llm.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.9,
+                },
             )
             content = resp.strip()
             if content.startswith('"') and content.endswith('"'):
