@@ -431,11 +431,12 @@ class MessageHandler:
             return []
 
         # 管理员发空间：硬过滤"空间"关键词 + LLM 判断意图
-        if is_sender_admin and "空间" in text:
-            try:
-                from server.bot.message_handler import _call_llm as _qzone_llm
-            except ImportError:
-                from server.bot.message_handler import _call_llm as _qzone_llm
+        # 合并消息场景：检查任意说话人是否为管理员
+        _qzone_admin = is_sender_admin or any(
+            any(str(a.get("qq", "")) == uid for a in self.cfg.admins)
+            for uid in (names_map.values() if names_map else [])
+        )
+        if _qzone_admin and "空间" in text:
             _qzone_check_prompt = (
                 "判断用户是否在要求机器人发 QQ 空间说说。"
                 "只有明确要求发空间/发说说/发动态才返回 YES，否则返回 NO。\n"
