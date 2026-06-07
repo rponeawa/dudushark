@@ -451,14 +451,37 @@ class MessageHandler:
             except Exception:
                 _qzone_intent = "NO"
             if "YES" in _qzone_intent.upper():
+                # 检索相关记忆：个人 + 群聊 + 全局
+                _qzone_mem_parts = []
+                _qzone_mem_uid = user_id
+                # names_map 可能把名字映射到实际 uid
+                if names_map:
+                    for _n, _uid in names_map.items():
+                        if any(str(a.get("qq", "")) == _uid for a in self.cfg.admins):
+                            _qzone_mem_uid = _uid
+                            break
+                _qzone_user_mems = self.memory.recall_by_vector(_qzone_mem_uid, text, n=3)
+                if _qzone_user_mems:
+                    _qzone_mem_parts.append("## 和这个人的记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_user_mems))
+                if group_id:
+                    _qzone_group_mems = self.memory.recall_by_vector(f"__group__{group_id}", text, n=3)
+                    if _qzone_group_mems:
+                        _qzone_mem_parts.append("## 群聊记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_group_mems))
+                _qzone_diary_mems = self.memory.recall_by_vector("__diary__", text, n=3)
+                if _qzone_diary_mems:
+                    _qzone_mem_parts.append("## 全局记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_diary_mems))
+                _qzone_mem_section = "\n\n".join(_qzone_mem_parts) if _qzone_mem_parts else "没有特别相关的记忆。"
+
                 # 提取指定内容（如果有）
                 _qzone_content_prompt = (
                     "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。\n"
-                    "用户让你发一条 QQ 空间说说。根据用户的要求生成内容。\n"
+                    "用户让你发一条 QQ 空间说说。根据用户的要求和相关记忆来写。\n"
                     "- 如果用户指定了内容，按用户说的写（用嘟嘟的语气润色）\n"
-                    "- 如果用户没指定内容（比如只说'发个空间'），你自己想一条\n"
+                    "- 如果用户没指定内容（比如只说'发个空间'），参考记忆写一条有趣的\n"
                     "- 50字以内，自然可爱，可以用'啊呜～'，自称'鱼'\n"
-                    "- 直接输出说说内容，不要加引号\n"
+                    "- 不要泄露记忆中他人的隐私\n"
+                    "- 直接输出说说内容，不要加引号\n\n"
+                    f"{_qzone_mem_section}\n\n"
                     f"用户消息：{text}\n"
                     "说说内容："
                 )
