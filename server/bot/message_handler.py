@@ -499,18 +499,24 @@ class MessageHandler:
                 if not _qzone_content:
                     return [ReplyPart("啊呜...想不出说什么～")]
 
+                # 构建上下文：人设 + 最近对话历史
+                _qzone_ctx_msgs = [
+                    {"role": "system", "content": PERSONA_SYSTEM_PROMPT.replace("{admins_description}", "")},
+                ]
+                _qzone_hist = self._conversations.get(conv_key, [])
+                for m in _qzone_hist[-10:]:
+                    _qzone_ctx_msgs.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+
                 # LLM 生成自然的回复（表示要去发了）
                 _qzone_ack_prompt = (
-                    "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。"
-                    "用户让你发 QQ 空间，你答应了，要回一句话表示你去发了。"
-                    "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号。直接输出那句话。\n"
-                    f"用户消息：{text}\n"
-                    "你的回复："
+                    f"用户消息：{text}\n\n"
+                    "用户让你发 QQ 空间，你答应了。回一句话表示你去发了。"
+                    "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号。直接输出那句话。"
                 )
                 try:
                     _ack_msg = await _call_llm(
                         self.cfg.llm.base_url, self.cfg.llm.api_key,
-                        {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_ack_prompt}],
+                        {"model": self.cfg.llm.model, "messages": _qzone_ctx_msgs + [{"role": "user", "content": _qzone_ack_prompt}],
                          "max_tokens": 600, "temperature": 0.9},
                     )
                     _ack_msg = _ack_msg.strip().strip('"')
@@ -542,16 +548,15 @@ class MessageHandler:
                             pass
                     _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
                     _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
-                    # LLM 生成发帖成功的确认
-                    _qzone_done_prompt = (
-                        "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。"
-                        "你刚发完一条 QQ 空间说说，要回一句话表示发好了。"
-                        "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号，不要重复说说内容。直接输出那句话。"
-                    )
+                    # LLM 生成发帖成功的确认（带上文）
+                    _qzone_done_msgs = _qzone_ctx_msgs + [
+                        {"role": "assistant", "content": _ack_msg},
+                        {"role": "user", "content": f"（你刚发完 QQ 空间说说，内容是「{_qzone_content}」。回一句话表示发好了，不要重复说说内容。）"},
+                    ]
                     try:
                         _done_msg = await _call_llm(
                             self.cfg.llm.base_url, self.cfg.llm.api_key,
-                            {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_done_prompt}],
+                            {"model": self.cfg.llm.model, "messages": _qzone_done_msgs,
                              "max_tokens": 600, "temperature": 0.9},
                         )
                         _done_msg = _done_msg.strip().strip('"')
