@@ -160,7 +160,7 @@ class QzoneClient:
                     try:
                         data = json.loads(raw)
                     except json.JSONDecodeError:
-                        return False, f"非 JSON 响应: {raw[:300]}"
+                        return False, f"非 JSON 响应({len(raw)}chars): {raw[:1000]}"
                 code = data.get("code", -1)
                 msg_text = data.get("message", "") or data.get("msg", "")
                 if code == 0:
