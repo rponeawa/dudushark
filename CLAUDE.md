@@ -169,7 +169,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - diary: 同 memory 格式，值得写才写
 - forget: `{"category":"类别","title":"标题"}` — 删除记忆
 - remind: `{"at_utc": Unix秒, "content": "提醒内容"}` — 一次性定时提醒
-- relay: `{"to_role": "角色名", "content": "转达内容"}` — 管理员间代传话
+- relay: `{"to_role": "角色名", "content": "转达内容", "voice": null|"last"|"all", "voice_emotion": null|"..."}` — 管理员间代传话，可选语音
 - qzone: 字符串，QQ 空间说说内容。仅管理员消息且含关键词时字段可见，主 LLM 自行判断是否填
 - search: `"search":"关键词"` — LLM 请求网络搜索，与 reply 同时输出，系统异步执行搜索+二次 LLM
 
