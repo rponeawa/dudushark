@@ -498,8 +498,27 @@ class MessageHandler:
                     return [ReplyPart(f"啊呜...内容生成失败了: {e}")]
                 if not _qzone_content:
                     return [ReplyPart("啊呜...想不出说什么～")]
-                # 先回复"好的鱼去发"
-                _ack_msg = "好～鱼这就去发！啊呜～"
+
+                # LLM 生成自然的回复（表示要去发了）
+                _qzone_ack_prompt = (
+                    "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。"
+                    "用户让你发 QQ 空间，你答应了，要回一句话表示你去发了。"
+                    "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号。直接输出那句话。\n"
+                    f"用户消息：{text}\n"
+                    "你的回复："
+                )
+                try:
+                    _ack_msg = await _call_llm(
+                        self.cfg.llm.base_url, self.cfg.llm.api_key,
+                        {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_ack_prompt}],
+                         "max_tokens": 600, "temperature": 0.9},
+                    )
+                    _ack_msg = _ack_msg.strip().strip('"')
+                    if not _ack_msg:
+                        _ack_msg = "好～鱼去发了！啊呜～"
+                except Exception:
+                    _ack_msg = "好～鱼去发了！啊呜～"
+
                 from server.bot.onebot_handler import onebot_server as _qzone_obs
                 _qzone_client = _qzone_obs.get_client(self.bot_qq)
                 if _qzone_client and _qzone_client.connected:
@@ -523,23 +542,21 @@ class MessageHandler:
                             pass
                     _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
                     _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
-                    # 发送结果确认
-                    _result_msg = f"发好啦～啊呜～\n「{_qzone_content}」"
+                    # 简单确认，不展示内容
                     if _qzone_client and _qzone_client.connected:
-                        await asyncio.sleep(1.5)
+                        await asyncio.sleep(2.0)
                         if is_group:
-                            await _qzone_client.send_group_msg(group_id, _result_msg)
+                            await _qzone_client.send_group_msg(group_id, "发好啦～啊呜～")
                         else:
-                            await _qzone_client.send_private_msg(user_id, _result_msg)
+                            await _qzone_client.send_private_msg(user_id, "发好啦～啊呜～")
                     return []
                 else:
-                    _fail_msg = f"啊呜...发空间失败了: {_msg}"
                     if _qzone_client and _qzone_client.connected:
-                        await asyncio.sleep(1.5)
+                        await asyncio.sleep(2.0)
                         if is_group:
-                            await _qzone_client.send_group_msg(group_id, _fail_msg)
+                            await _qzone_client.send_group_msg(group_id, f"啊呜...发空间失败了: {_msg}")
                         else:
-                            await _qzone_client.send_private_msg(user_id, _fail_msg)
+                            await _qzone_client.send_private_msg(user_id, f"啊呜...发空间失败了: {_msg}")
                     return []
             # 不匹配意图则继续正常对话流程
 
