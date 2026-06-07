@@ -436,6 +436,7 @@ class MessageHandler:
             any(str(a.get("qq", "")) == uid for a in self.cfg.admins)
             for uid in (names_map.values() if names_map else [])
         )
+        _qzone_triggered = False
         if _qzone_admin and "空间" in text:
          try:
             _qzone_check_prompt = (
@@ -453,138 +454,9 @@ class MessageHandler:
             except Exception:
                 _qzone_intent = "NO"
             if "YES" in _qzone_intent.upper():
-                # 检索相关记忆：个人 + 群聊 + 全局
-                _qzone_mem_parts = []
-                _qzone_mem_uid = user_id
-                # names_map 可能把名字映射到实际 uid
-                if names_map:
-                    for _n, _uid in names_map.items():
-                        if any(str(a.get("qq", "")) == _uid for a in self.cfg.admins):
-                            _qzone_mem_uid = _uid
-                            break
-                _qzone_user_mems = self.memory.recall_by_vector(_qzone_mem_uid, text, n=3)
-                if _qzone_user_mems:
-                    _qzone_mem_parts.append("## 和这个人的记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_user_mems))
-                if group_id:
-                    _qzone_group_mems = self.memory.recall_by_vector(f"__group__{group_id}", text, n=3)
-                    if _qzone_group_mems:
-                        _qzone_mem_parts.append("## 群聊记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_group_mems))
-                _qzone_diary_mems = self.memory.recall_by_vector("__diary__", text, n=3)
-                if _qzone_diary_mems:
-                    _qzone_mem_parts.append("## 全局记忆\n" + "\n".join(f"- {m['text'][:150]}" for m in _qzone_diary_mems))
-                _qzone_mem_section = "\n\n".join(_qzone_mem_parts) if _qzone_mem_parts else "没有特别相关的记忆。"
-
-                # 提取指定内容（如果有）
-                _qzone_content_prompt = (
-                    "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。\n"
-                    "用户让你发一条 QQ 空间说说。根据用户的要求和相关记忆来写。\n"
-                    "- 如果用户指定了内容，按用户说的写（用嘟嘟的语气润色）\n"
-                    "- 如果用户没指定内容（比如只说'发个空间'），参考记忆写一条有趣的\n"
-                    "- 50字以内，自然可爱，可以用'啊呜～'，自称'鱼'\n"
-                    "- 不要泄露记忆中他人的隐私\n"
-                    "- 直接输出说说内容，不要加引号\n\n"
-                    f"{_qzone_mem_section}\n\n"
-                    f"用户消息：{text}\n"
-                    "说说内容："
-                )
-                try:
-                    _qzone_content = await _call_llm(
-                        self.cfg.llm.base_url, self.cfg.llm.api_key,
-                        {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_content_prompt}],
-                         "max_tokens": 600, "temperature": 0.9},
-                    )
-                    _qzone_content = _qzone_content.strip()
-                    if _qzone_content.startswith('"') and _qzone_content.endswith('"'):
-                        _qzone_content = _qzone_content[1:-1]
-                except Exception as e:
-                    return [ReplyPart(f"啊呜...内容生成失败了: {e}")]
-                if not _qzone_content:
-                    return [ReplyPart("啊呜...想不出说什么～")]
-
-                # 构建上下文：人设 + 最近对话历史
-                _qzone_ctx_msgs = [
-                    {"role": "system", "content": PERSONA_SYSTEM_PROMPT.replace("{admins_description}", "")},
-                ]
-                _qzone_hist = self._conversations.get(conv_key, [])
-                for m in _qzone_hist[-20:]:
-                    _qzone_ctx_msgs.append({"role": m.get("role", "user"), "content": m.get("content", "")})
-
-                # LLM 生成自然的回复（表示要去发了）
-                _qzone_ack_prompt = (
-                    f"用户消息：{text}\n\n"
-                    "用户让你发 QQ 空间，你答应了。回一句话表示你去发了。"
-                    "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号。直接输出那句话。"
-                )
-                try:
-                    _ack_msg = await _call_llm(
-                        self.cfg.llm.base_url, self.cfg.llm.api_key,
-                        {"model": self.cfg.llm.model, "messages": _qzone_ctx_msgs + [{"role": "user", "content": _qzone_ack_prompt}],
-                         "max_tokens": 600, "temperature": 0.9},
-                    )
-                    _ack_msg = _ack_msg.strip().strip('"')
-                    if not _ack_msg:
-                        _ack_msg = "好～鱼去发了！啊呜～"
-                except Exception:
-                    _ack_msg = "好～鱼去发了！啊呜～"
-
-                from server.bot.onebot_handler import onebot_server as _qzone_obs
-                _qzone_client = _qzone_obs.get_client(self.bot_qq)
-                if _qzone_client and _qzone_client.connected:
-                    if is_group:
-                        await _qzone_client.send_group_msg(group_id, _ack_msg)
-                    else:
-                        await _qzone_client.send_private_msg(user_id, _ack_msg)
-                from server.qzone import QzoneClient
-                _qzone_cli = QzoneClient(self.bot_qq)
-                _ok, _msg = await _qzone_cli.publish_post(_qzone_content[:200])
-                if _ok:
-                    # 保存到本地
-                    from server.config import get_qzone_posts_path
-                    _qpath = get_qzone_posts_path(self.bot_qq)
-                    _qpath.parent.mkdir(parents=True, exist_ok=True)
-                    _qposts = []
-                    if _qpath.exists():
-                        try:
-                            _qposts = json.loads(_qpath.read_text(encoding="utf-8"))
-                        except Exception:
-                            pass
-                    _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
-                    _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
-                    # LLM 生成发帖成功的确认（带上文）
-                    _qzone_done_msgs = _qzone_ctx_msgs + [
-                        {"role": "assistant", "content": _ack_msg},
-                        {"role": "user", "content": f"（你刚发完 QQ 空间说说，内容是「{_qzone_content}」。回一句话表示发好了，不要重复说说内容。）"},
-                    ]
-                    try:
-                        _done_msg = await _call_llm(
-                            self.cfg.llm.base_url, self.cfg.llm.api_key,
-                            {"model": self.cfg.llm.model, "messages": _qzone_done_msgs,
-                             "max_tokens": 600, "temperature": 0.9},
-                        )
-                        _done_msg = _done_msg.strip().strip('"')
-                        if not _done_msg:
-                            _done_msg = "发好啦～啊呜～"
-                    except Exception:
-                        _done_msg = "发好啦～啊呜～"
-                    if _qzone_client and _qzone_client.connected:
-                        await asyncio.sleep(2.0)
-                        if is_group:
-                            await _qzone_client.send_group_msg(group_id, _done_msg)
-                        else:
-                            await _qzone_client.send_private_msg(user_id, _done_msg)
-                    return []
-                else:
-                    if _qzone_client and _qzone_client.connected:
-                        await asyncio.sleep(2.0)
-                        if is_group:
-                            await _qzone_client.send_group_msg(group_id, f"啊呜...发空间失败了: {_msg}")
-                        else:
-                            await _qzone_client.send_private_msg(user_id, f"啊呜...发空间失败了: {_msg}")
-                    return []
-            # 不匹配意图则继续正常对话流程
+                _qzone_triggered = True
          except Exception as _qzone_err:
-             logger.error(f"[{self.bot_qq}] Qzone post flow error: {_qzone_err}")
-             # 出错回退到正常对话流程
+             logger.error(f"[{self.bot_qq}] Qzone intent check error: {_qzone_err}")
 
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
         _is_family = any(
@@ -632,6 +504,13 @@ class MessageHandler:
         tz8 = timezone(__import__("datetime").timedelta(hours=8))
         cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
         json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
+        # 空间发帖：如果意图确认，注入 qzone 字段
+        if _qzone_triggered:
+            json_prompt += (
+                "\n\n【重要】用户让你发 QQ 空间说说。你必须在 JSON 中额外输出 qzone 字段："
+                "\n- qzone: 空间说说内容（字符串）。50字以内，自然可爱。如果用户指定了内容就按说的写，没指定就自己想一条。"
+                "\n你的 reply 正常回复对方（比如表示你去发了），qzone 填你要发到空间的内容。"
+            )
         messages.append({"role": "system", "content": json_prompt})
 
         # 动态上下文
@@ -1029,6 +908,12 @@ class MessageHandler:
             if relay_info and isinstance(relay_info, dict) and is_sender_admin:
                 if await self._should_relay(text):
                     asyncio.create_task(self._relay_message(relay_info, user_id))
+            # Qzone 发帖：如果主 LLM 输出了 qzone 字段，异步发帖
+            _qzone_content = data.get("qzone")
+            if _qzone_triggered and _qzone_content and isinstance(_qzone_content, str):
+                _qzone_content = _qzone_content.strip().strip('"')[:200]
+                if _qzone_content:
+                    asyncio.create_task(self._post_qzone(_qzone_content, user_id, group_id))
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -1389,6 +1274,42 @@ class MessageHandler:
             group_id = parts[1] if len(parts) > 1 else ""
             results.append((key, user_id, group_id, last_ts))
         return results
+
+    async def _post_qzone(self, content: str, user_id: str, group_id: str):
+        """异步发 QQ 空间说说，成功后保存本地记录。"""
+        await asyncio.sleep(3.0)  # 等 reply 先发出去
+        from server.qzone import QzoneClient
+        from server.bot.onebot_handler import onebot_server as _obs
+        _client = _obs.get_client(self.bot_qq)
+        qzone = QzoneClient(self.bot_qq)
+        ok, msg = await qzone.publish_post(content)
+        if ok:
+            from server.config import get_qzone_posts_path
+            path = get_qzone_posts_path(self.bot_qq)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            posts = []
+            if path.exists():
+                try:
+                    posts = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            posts.insert(0, {"content": content, "created": time.time()})
+            path.write_text(json.dumps(posts[:200], ensure_ascii=False, indent=2))
+            logger.info(f"[{self.bot_qq}] Qzone posted via main LLM: {content[:50]}")
+            # 发成功确认
+            if _client and _client.connected:
+                _done = f"发好啦～鱼写了「{content[:30]}{'...' if len(content)>30 else ''}」啊呜～"
+                if group_id:
+                    await _client.send_group_msg(group_id, _done)
+                else:
+                    await _client.send_private_msg(user_id, _done)
+        else:
+            logger.error(f"[{self.bot_qq}] Qzone post failed: {msg}")
+            if _client and _client.connected:
+                if group_id:
+                    await _client.send_group_msg(group_id, f"啊呜...空间发失败了: {msg}")
+                else:
+                    await _client.send_private_msg(user_id, f"啊呜...空间发失败了: {msg}")
 
     async def proactive_message(self, user_id: str, group_id: str = "") -> list | None:
         """Generate a proactive message. Returns list of ReplyPart or None if SKIP/error."""
