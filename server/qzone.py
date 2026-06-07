@@ -136,9 +136,11 @@ class QzoneClient:
                 raw = resp.text
                 # Response is HTML-wrapped JSONP:
                 # <html><body><script>...cb=frameElement.callback;...cb({"code":0,...});</script></body></html>
-                # Find the last "cb(" and extract balanced braces
+                # Find the callback invocation: cb({...}) or frameElement.callback({...})
                 data = None
-                cb_pos = raw.rfind("cb(")
+                cb_pos = raw.rfind("callback(")
+                if cb_pos < 0:
+                    cb_pos = raw.rfind("cb(")
                 if cb_pos >= 0:
                     json_start = raw.find("{", cb_pos)
                     if json_start >= 0:
