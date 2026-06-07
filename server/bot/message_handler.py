@@ -54,7 +54,29 @@ def _is_retryable(status: int) -> bool:
 
 
 async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> str:
-    """Call LLM API with exponential backoff retry. Raises on final failure."""
+    """Call LLM API with exponential backoff retry. Returns content string."""
+    msg = await _call_llm_msg(base_url, api_key, payload, timeout)
+    content = msg.get("content", "").strip()
+    if content:
+        return content
+    # Fallback: model in reasoning mode
+    reasoning = msg.get("reasoning", "").strip()
+    if reasoning:
+        # Try JSON first
+        m = re.search(r'\{[^{}]*"reply"[^}]*\}', reasoning)
+        if not m:
+            m = re.search(r'\{[^{}]*\}', reasoning)
+        if m:
+            return m.group(0)
+        # No JSON — return the last line (typically the intended answer for YES/NO calls)
+        lines = [l.strip() for l in reasoning.split("\n") if l.strip()]
+        if lines:
+            return lines[-1]
+    return ""
+
+
+async def _call_llm_msg(base_url: str, api_key: str, payload: dict, timeout: float = 60) -> dict:
+    """Call LLM API with retry. Returns the full message dict (content + tool_calls)."""
     await _acquire_rate()
     last_err: str = ""
     for attempt in range(LLM_RETRIES):
@@ -66,23 +88,7 @@ async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float =
                     json=payload,
                 )
             if resp.status_code == 200:
-                data = resp.json()
-                msg = data["choices"][0]["message"]
-                content = msg.get("content", "").strip()
-                if content:
-                    return content
-                # Fallback: model in reasoning mode, extract JSON from reasoning
-                reasoning = msg.get("reasoning", "").strip()
-                if reasoning:
-                    # Try to find JSON in the full reasoning
-                    m = re.search(r'\{[^{}]*"reply"[^}]*\}', reasoning)
-                    if not m:
-                        m = re.search(r'\{[^{}]*\}', reasoning)
-                    if m:
-                        return m.group(0)
-                    # No JSON found → model failed to produce output, return empty
-                    return ""
-                return ""
+                return resp.json()["choices"][0]["message"]
             if _is_retryable(resp.status_code):
                 last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
             else:
@@ -90,7 +96,7 @@ async def _call_llm(base_url: str, api_key: str, payload: dict, timeout: float =
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             last_err = str(e)
         except RuntimeError:
-            raise  # non-retryable HTTP errors
+            raise
 
         if attempt < LLM_RETRIES - 1:
             delay = LLM_RETRY_BASE_DELAY * (2 ** attempt)
@@ -278,7 +284,7 @@ class MessageHandler:
         async with self._lock:
             replies = await self._handle_impl(
                 user_id, user_name, combined, group_id, "group" if is_group else "private",
-                last_msg_id, names_map, all_images
+                last_msg_id, names_map, all_images, msg_ids
             )
 
         # 保存合并全文，供前端事件使用
@@ -296,6 +302,7 @@ class MessageHandler:
         msg_type: str = "private", quote_msg_id: str = "",
         names_map: dict[str, str] | None = None,
         images: list[str] | None = None,
+        msg_ids: list[str] | None = None,
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
@@ -368,21 +375,21 @@ class MessageHandler:
         # JSON 格式指令 — 紧跟人设之后，最大化缓存命中
         json_prompt = (
             "【SKIP规则 - 最重要】先判断消息是否跟你有关。明确是跟你说话、@你、戳你、接着你的话在说，才回。模棱两可一律不回，除非超级超级感兴趣。\n"
-            "【记忆规则 - 同样重要】先判断是否值得记。对方说了重要的事（关键信息、性格、喜好、经历、约定），才记。日常聊天——打招呼、夸两句、道晚安、随口闲聊——这些都是正常对话，不是记忆。拿不准就别记。\n\n"
+            "【记忆规则 - 同样重要】对方说了有点意思的事就可以记。关键信息、性格、喜好、经历、约定都值得记。日常寒暄——打招呼、道晚安、随口闲聊——不是记忆。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。不用markdown代码块包裹。\n"
-            "{\"reply\":\"...\",\"quote\":false,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
+            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
-            "- memory: 关于某人的重要信息，null居多。格式: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}。user填消息里的名字。相同类别+标题会更新"
+            "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
+            "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。相同类别+标题会更新"
         )
         if is_group:
-            json_prompt += "\n- group_memory: 关于这个群整体的事（非个人），null居多。格式: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}"
+            json_prompt += "\n- group_memory: 群整体的事（里程碑、群活动、群氛围）。格式必须为: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本"
         json_prompt += (
-            "\n- diary: 你自己的全局记忆，值得写才写。日常寒暄、道晚安、夸两句这类不记，null居多。格式同memory\n"
+            "\n- diary: 鱼自己的经历或感悟。格式同memory。如：被人夸了、学到了新东西、经历了特别的事、别人对鱼说了重要的话"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
-            "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
-            "- 需要查东西时用 {\"say\":\"...\",\"search\":\"...\"} 不要瞎编"
+            "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复"
         )
         # 注入当前时间，让 LLM 能计算 remind 时间戳
         now_utc = datetime.now(timezone.utc)
@@ -421,10 +428,7 @@ class MessageHandler:
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
 
         history = self._get_history(user_id, group_id)
-        ctx = self.ctx
-        if is_group:
-            ctx = ContextManager(max_tokens=8000, reserve_for_reply=1500)
-        fit_result = ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
+        fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
         history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
         messages.extend(history_msgs)
 
@@ -468,23 +472,7 @@ class MessageHandler:
         messages.append(user_msg)
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
-        # 调用 LLM（带重试）。网络搜索由 LLM 通过 JSON 中的 search 字段按需触发
-        llm = self.cfg.llm
-        max_tok = mood.llm_max_tokens()
-        payload = {
-            "model": llm.model,
-            "messages": messages,
-            "temperature": mood.llm_temperature(),
-            "max_tokens": max_tok,
-        }
-
-        try:
-            full_reply = await _call_llm(llm.base_url, llm.api_key, payload)
-        except Exception as e:
-            logger.error(f"LLM 调用最终失败: {e}")
-            return []
-
-        # 解析 JSON（去掉 markdown 围栏）
+        # 提前定义这些函数，供主流程和后台搜索任务共用
         def _parse_json(raw: str) -> dict | None:
             t = raw.strip()
             if t.startswith("```"):
@@ -496,7 +484,6 @@ class MessageHandler:
                 d = json.loads(t)
                 return d if isinstance(d, dict) else None
             except (json.JSONDecodeError, TypeError):
-                # 尝试修复截断的 JSON（补全缺失的括号）
                 fixed = t.rstrip()
                 open_braces = fixed.count("{") - fixed.count("}")
                 if open_braces > 0:
@@ -506,7 +493,6 @@ class MessageHandler:
                     return d if isinstance(d, dict) else None
                 except (json.JSONDecodeError, TypeError):
                     pass
-                # 兜底：用正则提取 reply 字段
                 m = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', t)
                 if m:
                     try:
@@ -515,20 +501,20 @@ class MessageHandler:
                         pass
                 return None
 
-        data = _parse_json(full_reply)
-
-        # 处理 memory
         async def _save_memory(mem, uid):
+            # 支持数组：多人场景下模型可能一次输出多条记忆
+            if isinstance(mem, list):
+                for item in mem:
+                    await _save_memory(item, uid)
+                return
             if not mem or not isinstance(mem, dict):
                 return
             action = mem.get("action", "save")
             if action != "delete":
-                # 独立 LLM 预判是否真的值得记录
                 ok = await self._should_record_memory(mem, text)
                 if not ok:
                     logger.info(f"[{self.bot_qq}] Memory pre-check skipped: {mem.get('category','')}/{mem.get('title','')}")
                     return
-            # 群聊中 LLM 可通过 user 字段指定记忆归属谁
             target_user = mem.get("user")
             if target_user and names_map and target_user in names_map:
                 uid = names_map[target_user]
@@ -539,104 +525,190 @@ class MessageHandler:
             try:
                 if action == "delete":
                     self.memory.forget(uid, cat, title)
+                    logger.info(f"[{self.bot_qq}] Memory deleted: {uid}/{cat}/{title}")
                 else:
                     content = str(mem.get("content", "")).strip()
                     if content:
                         self.memory.remember(uid, cat, title, content)
+                        logger.info(f"[{self.bot_qq}] Memory saved: {uid}/{cat}/{title}")
             except Exception:
                 pass
 
-        # ---- 多步：say + search → 先返回思考消息，后台异步查+回复 ----
-        if data and data.get("say") and not data.get("reply"):
-            say_text = data.get("say", "")
-            want_quote = data.get("quote", False)
-            search_query = data.get("search", "")
-            say_parts = self._split_reply(say_text) if say_text else []
+        # 调用 LLM。带 web_search 函数定义，LLM 按需触发
+        llm = self.cfg.llm
+        max_tok = mood.llm_max_tokens()
+        payload = {
+            "model": llm.model,
+            "messages": messages,
+            "temperature": mood.llm_temperature(),
+            "max_tokens": max_tok,
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "搜索互联网获取实时信息，如新闻、天气、最新事件等。只在确实需要查资料时才调用。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "搜索关键词"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }],
+            "tool_choice": "auto",
+        }
 
-            for part in say_parts:
-                self._append_history(user_id, "assistant", part, group_id)
+        try:
+            response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
+        except Exception as e:
+            logger.error(f"LLM 调用最终失败: {e}")
+            return []
 
-            # 后台任务：真正执行搜索 → LLM → 发送结果
-            async def _followup():
-                conv_key = self._conv_key(user_id, group_id)
-                final_data = {}
-                if search_query and self.cfg.web_search_enabled:
+        # 函数调用循环：LLM 请求搜索 → 先说一句话 → 后台搜索+LLM+发结果
+        tool_calls = response_msg.get("tool_calls", [])
+        if tool_calls and self.cfg.web_search_enabled:
+            search_queries = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                if fn.get("name") == "web_search":
                     try:
-                        results = await bing_search(str(search_query))
-                        logger.info(f"[multi-step] search done: {len(results) if results else 0} results")
-                        if results:
-                            ctx = ("## 网络搜索结果\n" + format_search_results(results)
-                                   + "\n\n用鱼自己的话把结果讲出来，绝对不能直接贴搜索结果的格式或文字。然后给出最终回复的JSON（包含reply和memory字段）。")
-                            fu_msgs = list(messages)
-                            fu_msgs.append({"role": "system", "content": ctx})
-                            fu_payload = {
-                                "model": llm.model, "messages": fu_msgs,
-                                "temperature": mood.llm_temperature(),
-                                "max_tokens": mood.llm_max_tokens(),
-                            }
-                            raw2 = await _call_llm(llm.base_url, llm.api_key, fu_payload, timeout=45)
-                            final_data = _parse_json(raw2) or {}
-                            logger.info(f"[multi-step] follow-up LLM done, reply={bool(final_data.get('reply'))}")
-                    except Exception as e2:
-                        logger.error(f"[multi-step] follow-up failed: {e2}")
+                        args = json.loads(fn.get("arguments", "{}"))
+                        q = args.get("query", "")
+                    except (json.JSONDecodeError, TypeError):
+                        q = ""
+                    if q:
+                        search_queries.append(q)
+                        logger.info(f"[{self.bot_qq}] LLM 请求搜索: {q}")
 
-                reply_txt = final_data.get("reply", "") if final_data else ""
-                if not reply_txt or reply_txt.strip() == "[SKIP]":
-                    return
-                if is_g:
-                    override = await self._should_skip_group(text, group_id, mentioned)
-                    if override:
-                        return
-                q = final_data.get("quote", False)
-                is_g = bool(group_id)
-                remind_final = final_data.get("remind")
-                if not (remind_final and isinstance(remind_final, dict)):
-                    await _save_memory(final_data.get("memory"), user_id)
-                    await _save_memory(final_data.get("diary"), "__diary__")
-                    if is_g:
-                        await _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
-                if remind_final and isinstance(remind_final, dict):
-                    self._save_remind(remind_final, user_id, group_id)
-                relay_final = final_data.get("relay")
-                if relay_final and isinstance(relay_final, dict) and is_sender_admin:
-                    if await self._should_relay(text):
-                        asyncio.create_task(self._relay_message(relay_final, user_id))
+            if search_queries:
+                # 生成一句自然的"正在搜"的话
+                query_text = "、".join(search_queries[:2])
+                say_msgs = [
+                    {"role": "system", "content": "你是嘟嘟鲨鱼，一只傲娇的赛博大鲨鱼。你现在需要去搜索一下资料。用一句简短自然的话告诉对方你正在查。风格如\"啊呜～鱼去搜一下～\"。只输出这一句话。"},
+                    {"role": "user", "content": f"有人问：{text[:200]}\n你要搜：{query_text}"},
+                ]
+                try:
+                    say_msg = await _call_llm_msg(llm.base_url, llm.api_key, {"model": llm.model, "messages": say_msgs, "temperature": 0.9, "max_tokens": 600}, timeout=10)
+                    say_text = say_msg.get("content", "").strip()
+                    if not say_text:
+                        # reasoning 模式：模型的最后一句思维通常是它想输出的内容
+                        r = say_msg.get("reasoning", "").strip()
+                        if r:
+                            lines = [l.strip() for l in r.split("\n") if l.strip()]
+                            say_text = lines[-1] if lines else r[-120:]
+                except Exception:
+                    say_text = ""
 
-                from server.bot.onebot_handler import onebot_server
-                client = onebot_server.get_client(self.bot_qq)
-                if not client or not client.connected:
-                    logger.warning(f"[multi-step] client not connected, dropping reply: {reply_txt[:50]}")
-                    return
-                logger.info(f"[multi-step] sending follow-up: {len(reply_txt)} chars")
-                target = group_id if is_g else user_id
-                for pi, part in enumerate(self._split_reply(reply_txt)):
-                    try:
-                        part = re.sub(r"^>>\s*", "", part)  # strip >>
-                        qid = quote_msg_id if (q and pi == 0 and quote_msg_id) else None
-                        if qid:
-                            if is_g:
-                                await client.send_group_msg_quote(target, part, qid)
-                            else:
-                                await client.send_private_msg_quote(user_id, part, qid)
-                        else:
-                            if is_g:
-                                await client.send_group_msg(target, part)
-                            else:
-                                await client.send_private_msg(user_id, part)
-                        if pi < len(self._split_reply(reply_txt)) - 1:
-                            typing_delay = max(2.0, len(part) * 0.08 + 1.0)
-                            await asyncio.sleep(typing_delay)
-                    except Exception:
-                        pass
+                say_parts = self._split_reply(say_text) if say_text else ["啊呜～鱼去查查～"]
+                for part in say_parts:
                     self._append_history(user_id, "assistant", part, group_id)
 
-            asyncio.create_task(_followup())
+                # 后台任务：搜索 → 二次LLM → 发送结果
+                async def _search_followup():
+                    for sq in search_queries:
+                        try:
+                            results = await bing_search(sq)
+                            if results:
+                                messages.append({"role": "system", "content": "## 网络搜索结果\n" + format_search_results(results) + "\n\n根据以上搜索结果回答问题，用鱼自己的话转述，不要直接贴原文。最终输出JSON格式回复（包含reply和memory字段）。"})
+                            else:
+                                messages.append({"role": "system", "content": f"搜索\"{sq}\"没找到结果，根据已有知识回答。"})
+                        except Exception:
+                            messages.append({"role": "system", "content": "搜索暂时不可用，根据已有知识回答。"})
 
-            result = []
-            for i, part in enumerate(say_parts):
-                qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
-                result.append(ReplyPart(part, qid))
-            return result
+                    fu_payload = {k: v for k, v in payload.items() if k not in ("tools", "tool_choice")}
+                    fu_payload["messages"] = messages
+                    try:
+                        fu_msg = await _call_llm_msg(llm.base_url, llm.api_key, fu_payload, timeout=45)
+                    except Exception:
+                        return
+
+                    fu_reply = fu_msg.get("content", "").strip()
+                    if not fu_reply:
+                        r = fu_msg.get("reasoning", "").strip()
+                        if r:
+                            m = re.search(r'\{[^{}]*"reply"[^}]*\}', r)
+                            if not m:
+                                m = re.search(r'\{[^{}]*\}', r)
+                            if m:
+                                fu_reply = m.group(0)
+
+                    final_data = _parse_json(fu_reply) or {}
+                    reply_txt = final_data.get("reply", "")
+                    if not reply_txt or reply_txt.strip() == "[SKIP]":
+                        return
+
+                    if is_group:
+                        override = await self._should_skip_group(text, group_id, mentioned)
+                        if override:
+                            return
+
+                    remind_final = final_data.get("remind")
+                    if not (remind_final and isinstance(remind_final, dict)):
+                        await _save_memory(final_data.get("memory"), user_id)
+                        await _save_memory(final_data.get("diary"), "__diary__")
+                        if is_group:
+                            await _save_memory(final_data.get("group_memory"), f"__group__{group_id}")
+                    if remind_final and isinstance(remind_final, dict):
+                        self._save_remind(remind_final, user_id, group_id)
+                    relay_final = final_data.get("relay")
+                    if relay_final and isinstance(relay_final, dict) and is_sender_admin:
+                        if await self._should_relay(text):
+                            asyncio.create_task(self._relay_message(relay_final, user_id))
+
+                    from server.bot.onebot_handler import onebot_server
+                    client = onebot_server.get_client(self.bot_qq)
+                    if not client or not client.connected:
+                        return
+                    target = group_id if is_group else user_id
+                    want_quote = final_data.get("quote", False)
+                    for pi, part in enumerate(self._split_reply(reply_txt)):
+                        try:
+                            part = re.sub(r"^>>\s*", "", part)
+                            qid = quote_msg_id if (want_quote and pi == 0 and quote_msg_id) else None
+                            if qid:
+                                if is_group:
+                                    await client.send_group_msg_quote(target, part, qid)
+                                else:
+                                    await client.send_private_msg_quote(user_id, part, qid)
+                            else:
+                                if is_group:
+                                    await client.send_group_msg(target, part)
+                                else:
+                                    await client.send_private_msg(user_id, part)
+                            if pi < len(self._split_reply(reply_txt)) - 1:
+                                await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+                        except Exception:
+                            pass
+                        self._append_history(user_id, "assistant", part, group_id)
+
+                asyncio.create_task(_search_followup())
+
+                result = []
+                for part in say_parts:
+                    result.append(ReplyPart(part, None))
+                return result
+
+        full_reply = response_msg.get("content", "").strip()
+        # Fallback: content 为空时从 reasoning 提取
+        if not full_reply:
+            reasoning = response_msg.get("reasoning", "").strip()
+            if reasoning:
+                m = re.search(r'\{[^{}]*"reply"[^}]*\}', reasoning)
+                if not m:
+                    m = re.search(r'\{[^{}]*\}', reasoning)
+                if m:
+                    full_reply = m.group(0)
+
+        data = _parse_json(full_reply)
+
+        # 诊断日志：追踪记忆创建
+        if data:
+            for fld in ("memory", "diary", "group_memory", "forget"):
+                val = data.get(fld)
+                if val:
+                    count = len(val) if isinstance(val, list) else 1
+                    logger.info(f"[{self.bot_qq}] LLM output {fld}: {count}条 - {json.dumps(val, ensure_ascii=False)[:200]}")
 
         # ---- 简单回复 ----
         reply_text = ""
@@ -644,6 +716,13 @@ class MessageHandler:
         if data:
             reply_text = data.get("reply", "")
             want_quote = data.get("quote", False)
+            # 根据 quote_index 选择引用的消息 ID
+            quote_idx = data.get("quote_index")
+            if want_quote and msg_ids and quote_idx and isinstance(quote_idx, (int, float)):
+                idx = int(quote_idx) - 1  # 转为 0-based
+                if 0 <= idx < len(msg_ids) and msg_ids[idx]:
+                    quote_msg_id = msg_ids[idx]
+                    logger.info(f"[{self.bot_qq}] quote_index={quote_idx} → msg_id={quote_msg_id}")
             remind_info = data.get("remind")
             # 有定时提醒时不再创建记忆，避免重复存储
             if not (remind_info and isinstance(remind_info, dict)):
@@ -707,7 +786,7 @@ class MessageHandler:
             {"role": "user", "content": prompt},
         ]
         llm = self.cfg.llm
-        payload = {"model": llm.model, "messages": msgs, "temperature": 0.3, "max_tokens": 150}
+        payload = {"model": llm.model, "messages": msgs, "temperature": 0.3, "max_tokens": 500}
         try:
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
             raw = raw.strip()
@@ -741,14 +820,15 @@ class MessageHandler:
                 ctx_lines.append(f"[{tag}] {role}: {m.get('content', '')[:80]}")
             context = "\n".join(ctx_lines) if ctx_lines else "（暂无最近历史）"
 
-            at_note = "（有人@鱼。但如果鱼在生气，或管理员在要求鱼SKIP/测试，可以不回。）" if mentioned else "（如果管理员要求鱼SKIP/测试，鱼应该配合不回。）"
+            at_note = "（有人@鱼，必须回复 YES。）" if mentioned else ""
             prompt = (
                 f"{persona_brief}\n\n"
-                "你是过滤器。鱼在群里非常安静，绝大多数时候都不说话。请严格判断她是否应该回复。\n"
-                + ("现在是深夜，鱼正在睡觉。除非是特别紧急的求助或非常非常有趣的话题，否则一律NO。\n" if self.mood.sleep_state == "sleeping" else "") +
-                "回复 YES（极少）：消息极其有趣让鱼忍不住想插嘴、有人在认真求助需要帮忙、话题正是鲨鱼/海洋/睡觉/软绵绵/科技、或者是明确跟鱼说话且鱼没有生气。\n"
-                "回复 NO（默认）：以上情况之外的一切——日常闲聊、寒暄、路人对话、不感兴趣、不确定跟鱼有没有关系、鱼在生这个人的气。\n"
-                "拿不准一律 NO。鱼的回复非常珍贵，不能随便开口。\n"
+                "你是过滤器。鱼已经决定回复这条消息了，你来最后把关——只有在明显不该回的时候才阻止。\n"
+                + ("现在是深夜，鱼正在睡觉。除非是特别紧急或非常有趣，否则阻止。\n" if get_mood(self.bot_qq).sleep_state == "sleeping" else "") +
+                ("鱼现在很困了，反应慢半拍。只有明显没意义的闲聊才阻止。\n" if get_mood(self.bot_qq).sleep_state == "sleepy" else "") +
+                "阻止（NO）：鱼在生这个人的气、消息明显不是跟鱼说话、纯路人尬聊。\n"
+                "放行（YES）：其余情况，包括正常对话、接话、回答问题、被@。\n"
+                "鱼已经想好要回了，除非确实不该回，否则放行。\n"
                 f"{at_note}\n"
                 "只输出 YES 或 NO。"
             )
@@ -756,7 +836,7 @@ class MessageHandler:
                 "model": llm.model, "messages": [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"最近对话：\n{context}\n\n新消息：\n{text[:500]}"},
-                ], "temperature": 0.3, "max_tokens": 5,
+                ], "temperature": 0.3, "max_tokens": 500,
             }
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
             result = raw.strip().upper()
@@ -802,19 +882,21 @@ class MessageHandler:
             title = mem.get("title", "")
             content = mem.get("content", "")
             prompt = (
-                "你是记忆过滤器。判断这条信息是否真正值得记录。\n"
-                "值得记录：关键个人信息、重要经历、性格特点、约定承诺、强烈情感。\n"
-                "不值得记录：日常寒暄、随口闲聊、道晚安、夸两句、普通互动。\n"
+                "你是记忆过滤器。判断这条信息是否真正值得长期记住。\n"
+                "值得记录：反映人的身份背景、重要经历、深层性格、明确约定、强烈情感。\n"
+                "不值得记录：一次性的随口评价（任何话题）、泛泛而谈的感受、纯情绪发泄、短暂状态的描述。\n"
                 "只输出 YES 或 NO。"
             )
             payload = {
                 "model": llm.model, "messages": [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"消息：{text[:200]}\n\n记忆：{cat}/{title} - {content[:200]}"},
-                ], "temperature": 0.1, "max_tokens": 5,
+                ], "temperature": 0.1, "max_tokens": 500,
             }
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
-            return "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
+            decision = "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
+            logger.info(f"[{self.bot_qq}] Memory pre-check: {cat}/{title} → {'SAVE' if decision else 'SKIP'} (raw={raw.strip()[:80]})")
+            return decision
         except Exception:
             return True  # 出错时默认写（宁可多记不漏）
 
@@ -832,7 +914,7 @@ class MessageHandler:
                 "model": llm.model, "messages": [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": text[:300]},
-                ], "temperature": 0.1, "max_tokens": 5,
+                ], "temperature": 0.1, "max_tokens": 500,
             }
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
             return "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
@@ -973,7 +1055,7 @@ class MessageHandler:
         ]
 
         llm = self.cfg.llm
-        payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(512)}
+        payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(1024)}
 
         try:
             text = await _call_llm(llm.base_url, llm.api_key, payload, timeout=45)

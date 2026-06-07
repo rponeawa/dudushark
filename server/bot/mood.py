@@ -138,8 +138,11 @@ class DuduMood:
         self._offset_until = now + random.randint(7200, 14400)
 
     def _tick_sleep(self, now: float):
-        # Sleeping state is handled by _full_update
+        # 过了 7 点还没醒 → 强制醒来
         if self.sleep_state == "sleeping":
+            if self._hour() >= 7:
+                self.sleep_state = "just_woke"
+                self.sleep_state_until = now + random.randint(180, 480)
             return
 
         if now < self.sleep_state_until:
@@ -160,7 +163,7 @@ class DuduMood:
         if self.sleep_state == "sleeping":
             return 0.02
         if self.sleep_state == "sleepy":
-            return 0.08
+            return 0.25
         if self.sleep_state == "just_woke":
             return 2.0
         return 1.0
