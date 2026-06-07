@@ -1234,7 +1234,7 @@ class MessageHandler:
 
         prompt_text = (PROACTIVE_PROMPT.format(context=context) +
             "\n\n输出JSON格式: {\"reply\":\"...\",\"voice\":null,\"voice_emotion\":null}"
-            "\nvoice: 大部分null，有时\"last\"（最后一段发语音），偶尔\"all\"。主动找人的时候适合发语音，显得更亲切可爱。"
+            "\nvoice: 大部分null，偶尔\"last\"（最后一段发语音），极少\"all\"。主动找人的时候可以比平时多发一点点语音，显得更亲切。"
             "\nvoice_emotion: \"撒娇\"/\"高兴\"/\"生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。"
             "\n不说就输出{\"reply\":\"[SKIP]\"}。")
 
