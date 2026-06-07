@@ -11,7 +11,7 @@ import re
 import time
 
 from server.bot.onebot_handler import onebot_server
-from server.bot.message_handler import get_message_handler, SPLIT_PATTERN
+from server.bot.message_handler import get_message_handler
 from server.bot.mood import get_mood
 
 logger = logging.getLogger("dudushark.proactive")
@@ -259,12 +259,12 @@ class ProactiveScheduler:
         handler = get_message_handler(self.bot_qq)
 
         try:
-            text = await handler.proactive_message(user_id, group_id)
+            replies = await handler.proactive_message(user_id, group_id)
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Proactive LLM error: {e}")
             return
 
-        if not text:
+        if not replies:
             return
 
         client = onebot_server.get_client(self.bot_qq)
@@ -274,20 +274,40 @@ class ProactiveScheduler:
         try:
             is_group = bool(group_id)
             target = group_id if is_group else user_id
-            parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()] if text else []
-            for i, part in enumerate(parts):
-                part = re.sub(r"^>>\s*", "", part)
-                if is_group:
-                    await client.send_group_msg(target, part)
+            for i, part in enumerate(replies):
+                text = re.sub(r"^>>\s*", "", part.text)
+                if part.voice:
+                    # 语音回复
+                    import base64, os, uuid
+                    audio_bytes = await handler._tts_speak(text, part.voice_emotion)
+                    if audio_bytes:
+                        tts_dir = handler.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
+                        os.makedirs(tts_dir, exist_ok=True)
+                        fname = f"{uuid.uuid4().hex[:8]}.wav"
+                        with open(os.path.join(tts_dir, fname), "wb") as f:
+                            f.write(audio_bytes)
+                        docker_path = f"/app/napcat/config/tts/{fname}"
+                        if is_group:
+                            await client.send_group_voice(target, docker_path)
+                        else:
+                            await client.send_private_voice(user_id, docker_path)
+                    else:
+                        if is_group:
+                            await client.send_group_msg(target, text)
+                        else:
+                            await client.send_private_msg(user_id, text)
                 else:
-                    await client.send_private_msg(user_id, part)
-                if i < len(parts) - 1:
-                    await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+                    if is_group:
+                        await client.send_group_msg(target, text)
+                    else:
+                        await client.send_private_msg(user_id, text)
+                if i < len(replies) - 1:
+                    await asyncio.sleep(max(2.0, len(text) * 0.08 + 1.0))
 
             now = self._now()
             self._last_global_ts = now
             self._last_conv_proactive[conv_key] = now
-            logger.info(f"[{self.bot_qq}] Proactive sent → {conv_key} ({len(parts)} parts)")
+            logger.info(f"[{self.bot_qq}] Proactive sent → {conv_key} ({len(replies)} parts)")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Proactive send failed: {e}")
 

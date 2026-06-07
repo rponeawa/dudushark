@@ -915,7 +915,8 @@ class MessageHandler:
             elif voice_mode == "last" and is_last:
                 is_voice = True
             result.append(ReplyPart(part, qid, voice=is_voice, voice_emotion=voice_emotion))
-            self._append_history(user_id, "assistant", part, group_id)
+            hist_content = f"[发出语音] {part}" if is_voice else part
+            self._append_history(user_id, "assistant", hist_content, group_id)
         return result
 
     async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
@@ -1209,8 +1210,8 @@ class MessageHandler:
             results.append((key, user_id, group_id, last_ts))
         return results
 
-    async def proactive_message(self, user_id: str, group_id: str = "") -> str | None:
-        """Generate a proactive message. Returns text or None if SKIP/error."""
+    async def proactive_message(self, user_id: str, group_id: str = "") -> list | None:
+        """Generate a proactive message. Returns list of ReplyPart or None if SKIP/error."""
         from server.bot.persona import PERSONA_SYSTEM_PROMPT
         from server.bot.proactive import PROACTIVE_PROMPT
 
@@ -1231,7 +1232,11 @@ class MessageHandler:
                 lines.append(f"- [{m.get('meta', {}).get('date', '?')}] {m['text'][:200]}")
             memories_text = "\n".join(lines)
 
-        prompt_text = PROACTIVE_PROMPT.format(context=context)
+        prompt_text = (PROACTIVE_PROMPT.format(context=context) +
+            "\n\n输出JSON格式: {\"reply\":\"...\",\"voice\":null,\"voice_emotion\":null}"
+            "\nvoice: null不发语音, \"all\"全发, \"last\"最后一段发。仅在撒娇卖萌时偶尔用。"
+            "\nvoice_emotion: \"撒娇\"/\"高兴\"/\"生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。"
+            "\n不说就输出{\"reply\":\"[SKIP]\"}。")
 
         mood = get_mood(self.bot_qq)
         mood.update()
@@ -1253,26 +1258,64 @@ class MessageHandler:
         payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(1024)}
 
         try:
-            text = await _call_llm(llm.base_url, llm.api_key, payload, timeout=45)
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=45)
         except Exception as e:
             logger.error(f"Proactive LLM 最终失败: {e}")
             return None
 
-        if not text or text.strip() == "[SKIP]":
+        if not raw:
             return None
+
+        # Parse JSON (same _parse_json logic as normal replies)
+        t = raw.strip()
+        if t.startswith("```"):
+            t = t.split("\n", 1)[-1] if "\n" in t else t[3:]
+            if t.endswith("```"):
+                t = t[:-3]
+            t = t.strip()
+        data = None
+        try:
+            data = json.loads(t)
+            if not isinstance(data, dict):
+                data = None
+        except json.JSONDecodeError:
+            pass
+        if not data:
+            # Fallback: plain text
+            data = {"reply": raw.strip()}
+
+        reply_text = data.get("reply", "")
+        if not reply_text or reply_text.strip() == "[SKIP]":
+            return None
+
+        voice_mode = data.get("voice")
+        voice_emotion = data.get("voice_emotion", "")
+        parts = self._split_reply(reply_text)
+        result = []
+        for i, part in enumerate(parts):
+            is_last = (i == len(parts) - 1)
+            is_voice = False
+            if voice_mode == "all":
+                is_voice = True
+            elif voice_mode == "last" and is_last:
+                is_voice = True
+            result.append(ReplyPart(part, voice=is_voice, voice_emotion=voice_emotion))
 
         async with self._lock:
             key = self._conv_key(user_id, group_id)
             if key not in self._conversations:
                 self._conversations[key] = []
-            self._conversations[key].append({
-                "role": "assistant",
-                "content": text,
-                "ts": time.time(),
-                "proactive": True,
-            })
+            for i, part in enumerate(parts):
+                hist_content = f"[发出语音] {part}" if result[i].voice else part
+                self._conversations[key].append({
+                    "role": "assistant",
+                    "content": hist_content,
+                    "ts": time.time(),
+                    "proactive": True,
+                })
+            self._persist_convo(key)
 
-        return text
+        return result
 
 
 _message_handlers: dict[str, MessageHandler] = {}
