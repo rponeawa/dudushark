@@ -457,7 +457,7 @@ class MessageHandler:
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
-            "- voice: 发送语音。大部分情况null，偶尔用\"last\"（只有最后一段发语音），极少用\"all\"（全发语音）。撒娇卖萌/表达亲密时发，对方明确要求语音回复时也发。\n"
+            "- voice: 发送语音。大部分null，偶尔\"last\"（最后一段发语音），极少\"all\"（合并成一条语音）。如果最后一段是\"啊呜～\"且选last，会自动把它和上一段合并发音。撒娇卖萌/表达亲密时发。\n"
             "- voice_emotion: 语音情绪。null或\"撒娇\"/\"高兴\"/\"非常高兴\"/\"生气\"/\"非常生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。只在voice不为null时有效。\n"
             "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。相同类别+标题会更新"
         )
@@ -904,19 +904,42 @@ class MessageHandler:
         # 语音决策
         voice_mode = data.get("voice") if data else None
         voice_emotion = data.get("voice_emotion", "") if data else ""
-        result = []
         parts = self._split_reply(reply_text)
-        for i, part in enumerate(parts):
-            qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
-            is_last = (i == len(parts) - 1)
-            is_voice = False
-            if voice_mode == "all":
-                is_voice = True
-            elif voice_mode == "last" and is_last:
-                is_voice = True
-            result.append(ReplyPart(part, qid, voice=is_voice, voice_emotion=voice_emotion))
-            hist_content = f"[发出语音] {part}" if is_voice else part
-            self._append_history(user_id, "assistant", hist_content, group_id)
+        result = []
+
+        if voice_mode == "all":
+            # all = 合并全部为一条语音消息
+            combined = "".join(parts)
+            qid = quote_msg_id if (want_quote and quote_msg_id) else None
+            result.append(ReplyPart(combined, qid, voice=True, voice_emotion=voice_emotion))
+            self._append_history(user_id, "assistant", f"[发出语音] {combined}", group_id)
+        elif voice_mode == "last" and len(parts) >= 2:
+            # 最后一段如果是"啊呜～"之类的语气词 → 合并倒数两段一起发语音
+            last = parts[-1].strip()
+            if re.match(r'^啊呜[～~]?$', last):
+                merged_text = parts[-1] + parts[-2] if len(parts) >= 2 else last
+                text_parts = parts[:-2]
+                voice_text = parts[-2] + parts[-1]
+            else:
+                text_parts = parts[:-1]
+                voice_text = parts[-1]
+            for i, part in enumerate(text_parts):
+                qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
+                result.append(ReplyPart(part, qid))
+                self._append_history(user_id, "assistant", part, group_id)
+            qid = quote_msg_id if (want_quote and not text_parts and quote_msg_id) else None
+            result.append(ReplyPart(voice_text, qid, voice=True, voice_emotion=voice_emotion))
+            self._append_history(user_id, "assistant", f"[发出语音] {voice_text}", group_id)
+        elif voice_mode == "last":
+            # 只有一段，直接发语音
+            qid = quote_msg_id if (want_quote and quote_msg_id) else None
+            result.append(ReplyPart(parts[0], qid, voice=True, voice_emotion=voice_emotion))
+            self._append_history(user_id, "assistant", f"[发出语音] {parts[0]}", group_id)
+        else:
+            for i, part in enumerate(parts):
+                qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
+                result.append(ReplyPart(part, qid))
+                self._append_history(user_id, "assistant", part, group_id)
         return result
 
     async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
@@ -1292,21 +1315,33 @@ class MessageHandler:
         voice_emotion = data.get("voice_emotion", "")
         parts = self._split_reply(reply_text)
         result = []
-        for i, part in enumerate(parts):
-            is_last = (i == len(parts) - 1)
-            is_voice = False
-            if voice_mode == "all":
-                is_voice = True
-            elif voice_mode == "last" and is_last:
-                is_voice = True
-            result.append(ReplyPart(part, voice=is_voice, voice_emotion=voice_emotion))
+
+        if voice_mode == "all":
+            combined = "".join(parts)
+            result.append(ReplyPart(combined, voice=True, voice_emotion=voice_emotion))
+        elif voice_mode == "last" and len(parts) >= 2:
+            last = parts[-1].strip()
+            if re.match(r'^啊呜[～~]?$', last):
+                text_parts = parts[:-2]
+                voice_text = parts[-2] + parts[-1]
+            else:
+                text_parts = parts[:-1]
+                voice_text = parts[-1]
+            for part in text_parts:
+                result.append(ReplyPart(part))
+            result.append(ReplyPart(voice_text, voice=True, voice_emotion=voice_emotion))
+        elif voice_mode == "last":
+            result.append(ReplyPart(parts[0], voice=True, voice_emotion=voice_emotion))
+        else:
+            for part in parts:
+                result.append(ReplyPart(part))
 
         async with self._lock:
             key = self._conv_key(user_id, group_id)
             if key not in self._conversations:
                 self._conversations[key] = []
-            for i, part in enumerate(parts):
-                hist_content = f"[发出语音] {part}" if result[i].voice else part
+            for rp in result:
+                hist_content = f"[发出语音] {rp.text}" if rp.voice else rp.text
                 self._conversations[key].append({
                     "role": "assistant",
                     "content": hist_content,
