@@ -457,7 +457,7 @@ class MessageHandler:
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
-            "- voice: 发送语音。大部分null，偶尔\"last\"（最后一段发语音），极少\"all\"（合并成一条语音）。撒娇卖萌/表达亲密时发。\n"
+            "- voice: 发送语音。绝大多数情况null。只有撒娇卖萌、对方要求、或者非常开心时才偶尔发\"last\"（最后一段发语音），极少\"all\"（合并成一条语音）。\n"
             "- voice_emotion: 语音情绪。null或\"撒娇\"/\"高兴\"/\"非常高兴\"/\"生气\"/\"非常生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。只在voice不为null时有效。\n"
             "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。相同类别+标题会更新"
         )
@@ -1257,7 +1257,7 @@ class MessageHandler:
 
         prompt_text = (PROACTIVE_PROMPT.format(context=context) +
             "\n\n输出JSON格式: {\"reply\":\"...\",\"voice\":null,\"voice_emotion\":null}"
-            "\nvoice: 大部分null，偶尔\"last\"（最后一段发语音），极少\"all\"。主动找人的时候可以比平时多发一点点语音，显得更亲切。"
+            "\nvoice: 绝大多数情况null。偶尔\"last\"（最后一段发语音），极少\"all\"。主动找人时可以比平时稍微多发一点点语音。"
             "\nvoice_emotion: \"撒娇\"/\"高兴\"/\"生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。"
             "\n不说就输出{\"reply\":\"[SKIP]\"}。")
 
