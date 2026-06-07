@@ -123,6 +123,14 @@ class ProactiveScheduler:
 
     # ── decision: whom to talk to? ──────────────────────────
 
+    def _user_messaged_today(self, conv_key: str, handler) -> bool:
+        """对方今天（UTC+8 0:00 起）有没有给鱼发过消息。"""
+        from datetime import datetime, timezone, timedelta
+        tz8 = timezone(timedelta(hours=8))
+        today_start = datetime.now(tz8).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        msgs = handler._conversations.get(conv_key, [])
+        return any(m.get("role") == "user" and m.get("ts", 0) >= today_start for m in msgs)
+
     def _relationship_warmth(self, conv_key: str, handler) -> float:
         """0.0–1.0 score reflecting how close Dudu feels to this person.
 
@@ -155,6 +163,9 @@ class ProactiveScheduler:
         weights = []
 
         for conv_key, user_id, group_id, last_ts in eligible:
+            # 对方今天没说过话 → 不主动找
+            if not self._user_messaged_today(conv_key, handler):
+                continue
             # Per-conversation cooldown
             if now - self._last_conv_proactive.get(conv_key, 0) < self._cfg.proactive_per_conv_cooldown_sec:
                 continue

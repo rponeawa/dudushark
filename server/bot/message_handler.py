@@ -131,6 +131,7 @@ class MessageHandler:
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
         self._conversations: dict[str, list[dict]] = {}
         self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
+        self._paused_groups: set[str] = set()   # 被管理员暂停的群
         self._lock = asyncio.Lock()
         # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
         self._buffers: dict[tuple[str, str], dict] = {}
@@ -365,6 +366,22 @@ class MessageHandler:
 
         # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
         is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
+
+        # 群聊暂停/恢复：被暂停的群直接跳过，不落盘
+        if is_group and group_id in self._paused_groups:
+            # 检查是否是管理员发的 /resume
+            if is_sender_admin and text.strip().startswith("/resume"):
+                self._paused_groups.discard(group_id)
+                logger.info(f"[{self.bot_qq}] Group {group_id} resumed by admin {user_id}")
+                return [ReplyPart("啊呜～鱼回来啦！有什么好玩的事吗？")]
+            # 其他消息全部忽略，不落盘
+            return []
+
+        # /pause 命令：管理员暂停群聊
+        if is_sender_admin and is_group and text.strip().startswith("/pause"):
+            self._paused_groups.add(group_id)
+            logger.info(f"[{self.bot_qq}] Group {group_id} paused by admin {user_id}")
+            return [ReplyPart("啊呜～鱼先歇会儿...有事叫鱼就好～")]
 
         # /say 命令：管理员测试语音  (/say [情绪] 文本)
         import re as _re2
