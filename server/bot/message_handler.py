@@ -132,6 +132,8 @@ class MessageHandler:
         self._conversations: dict[str, list[dict]] = {}
         self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
         self._paused_groups: set[str] = set(self.cfg.paused_groups or [])  # 被管理员暂停的群
+        self._buffers: dict[tuple[str, str], dict] = {}
+        self._last_combined: dict[str, str] = {}
 
     def _save_paused_groups(self):
         """持久化暂停列表到 bot_config.json。"""
