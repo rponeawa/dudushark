@@ -134,20 +134,27 @@ class QzoneClient:
                     headers=headers,
                 )
                 raw = resp.text
-                logger.info(f"[{self.bot_qq}] Qzone publish response: status={resp.status_code} body={raw[:500]}")
-                # Response is HTML-wrapped JSONP: <html>...<script>...cb({...});</script>...
-                # Find the last JSON object in the response
-                json_match = _re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw)
-                if not json_match:
-                    return False, f"响应无 JSON: {raw[:200]}"
-                # Take the last (deepest) JSON match — that's the actual data
-                data = json.loads(json_match[-1])
+                # Response is HTML-wrapped JSONP: <html>...cb({...});</script>
+                # Extract the callback JSON — it's the outermost {…} after "cb("
+                cb_match = _re.search(r'cb\s*\(\s*(\{.*\})\s*\)', raw, _re.DOTALL)
+                if cb_match:
+                    try:
+                        data = json.loads(cb_match.group(1))
+                    except json.JSONDecodeError:
+                        return False, f"JSON 解析失败: {cb_match.group(1)[:200]}"
+                else:
+                    # Fallback: try parsing entire response as JSON
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        return False, f"非 JSON 响应: {raw[:300]}"
                 code = data.get("code", -1)
+                msg_text = data.get("message", "") or data.get("msg", "")
                 if code == 0:
                     logger.info(f"[{self.bot_qq}] Qzone post OK: {content[:50]}...")
                     return True, "ok"
                 else:
-                    return False, f"code={code} msg={data.get('message', '')} raw={json_match[-1][:200]}"
+                    return False, f"code={code} msg={msg_text}"
         except Exception as e:
             return False, f"异常: {e}"
 
