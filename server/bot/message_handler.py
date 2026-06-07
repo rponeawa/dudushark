@@ -504,7 +504,7 @@ class MessageHandler:
                     {"role": "system", "content": PERSONA_SYSTEM_PROMPT.replace("{admins_description}", "")},
                 ]
                 _qzone_hist = self._conversations.get(conv_key, [])
-                for m in _qzone_hist[-10:]:
+                for m in _qzone_hist[-20:]:
                     _qzone_ctx_msgs.append({"role": m.get("role", "user"), "content": m.get("content", "")})
 
                 # LLM 生成自然的回复（表示要去发了）
