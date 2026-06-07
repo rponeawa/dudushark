@@ -159,8 +159,10 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 家族记忆仅 role 含"妈"的成员在私聊中注入
 
 **Prompt 缓存优化：**
-- 消息顺序：[0]persona(固定→缓存命中) [1]json_prompt(几乎固定) [2]mood [3]family [4]diary [5]group [6]memories [7+]history
-- msg[0] 永远不变 → prefix cache 命中率 100%
+- 消息顺序：[0]persona(固定→缓存命中) [1]json_prompt(静态，时间已分离) [2]当前时间(独立消息) [3]mood [4]family [5]diary [6]group [7]memories [8]family_note [9]relay [10+]history → user_msg
+- 时间从 json_prompt 分离到独立消息，避免 json_prompt 每 1-2 分钟整体 cache miss
+- family_note/relay/voice_note/memory_note 全部移到 history 和 user_msg 之前
+- persona + json_prompt 稳定缓存，动态内容集中在后面
 
 **JSON 格式指令：**
 - memory: `{"user":"名字","category":"类别","title":"标题","content":"内容"}` — user 字段指定归属

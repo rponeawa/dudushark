@@ -474,11 +474,6 @@ class MessageHandler:
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
         )
-        # 注入当前北京时间，让 LLM 感知时间
-        now_utc = datetime.now(timezone.utc)
-        tz8 = timezone(__import__("datetime").timedelta(hours=8))
-        cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
-        json_prompt += f"\n（当前北京时间: {cn_str}）"
         # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
         if _qzone_keyword:
             json_prompt += (
@@ -486,6 +481,12 @@ class MessageHandler:
                 "你觉得值得发一条说说的时候才填（比如对方让你发、或者聊到了有意思的事想分享），平时留 null 就好。"
             )
         messages.append({"role": "system", "content": json_prompt})
+
+        # 时间单独一个消息，避免 json_prompt 因时间变化而整体 cache miss
+        now_utc = datetime.now(timezone.utc)
+        tz8 = timezone(__import__("datetime").timedelta(hours=8))
+        cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
+        messages.append({"role": "system", "content": f"当前北京时间: {cn_str}"})
 
         # 动态上下文
         if mood_context:
@@ -514,16 +515,11 @@ class MessageHandler:
                 title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。）"
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
 
-        history = self._get_history(user_id, group_id)
-        fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
-        history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
-        messages.extend(history_msgs)
-
-        # 家族提醒
+        # 家族提醒（history 之前，保持缓存边界清晰）
         if _is_family and not is_group and self.cfg.family_note:
             messages.append({"role": "system", "content": self.cfg.family_note})
 
-        # 管理员代传话
+        # 管理员代传话（history 之前）
         if is_sender_admin and not is_group:
             admin_roles = [a.get("role","") for a in self.cfg.admins if a.get("role")]
             role_list = "、".join(admin_roles) if admin_roles else "无"
@@ -532,6 +528,11 @@ class MessageHandler:
                 "例-小妈说\"帮我告诉妈妈明天去看她\"→{\"reply\":\"好的～\",\"relay\":{\"to_role\":\"妈妈\",\"content\":\"小妈说明天去看你\"}}\n"
                 "只有对方明确说\"帮我告诉XX/帮我转达给XX/跟XX说\"才触发。绝对不要主动转达。不确定该不该转达就不要转达。"
             )})
+
+        history = self._get_history(user_id, group_id)
+        fit_result = self.ctx.fit_messages(PERSONA_SYSTEM_PROMPT, history)
+        history_msgs = fit_result[1:] if fit_result and len(fit_result) > 1 else []
+        messages.extend(history_msgs)
 
         prefix = "[群聊]" if is_group else ""
         mentioned = is_group and ("@鱼" in text or "[回复鱼]" in text)
@@ -609,11 +610,12 @@ class MessageHandler:
             user_msg = {"role": "user", "content": f"{prefix}{display_name} 说: {text}"}
         self._append_history(user_id, "user", text, group_id)
 
-
-        messages.append(user_msg)
+        # 最终提示放在 user_msg 之前，不影响缓存
         if voice_transcripts:
             messages.append({"role": "system", "content": "（语音已自动转写为文字，直接回复内容即可，不需要说你听不到语音。）"})
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
+
+        messages.append(user_msg)
 
         # 提前定义这些函数，供主流程和后台搜索任务共用
         def _parse_json(raw: str) -> dict | None:
