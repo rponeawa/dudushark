@@ -527,7 +527,6 @@ class MessageHandler:
                 f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
                 "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null}\n"
                 "voice: 转达时也可以发语音。大部分时候null。撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n"
-                "例-小妈说\"帮我告诉妈妈明天去看她\"→{\"reply\":\"好的～\",\"relay\":{\"to_role\":\"妈妈\",\"content\":\"小妈说明天去看你\",\"voice\":null,\"voice_emotion\":null}}\n"
                 "只有对方明确说\"帮我告诉XX/帮我转达给XX/跟XX说\"才触发。绝对不要主动转达。不确定该不该转达就不要转达。"
             )})
 
@@ -1226,27 +1225,55 @@ class MessageHandler:
             from server.bot.onebot_handler import onebot_server
             client = onebot_server.get_client(self.bot_qq)
             if client and client.connected:
-                # 语音转达
-                voice_sent = False
-                if relay_voice and relay_voice in ("last", "all") and self.cfg.tts_enabled:
-                    tts_text = f"{from_label}让鱼转达：{content}"
-                    audio = await self._tts_speak(tts_text, relay_voice_emotion or "撒娇")
-                    if audio:
-                        import os, uuid, asyncio as _asyncio
-                        tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
-                        os.makedirs(tts_dir, exist_ok=True)
-                        fname = f"relay_{uuid.uuid4().hex[:8]}.wav"
-                        fpath = os.path.join(tts_dir, fname)
-                        with open(fpath, "wb") as wf:
-                            wf.write(audio)
-                        docker_path = f"/app/napcat/config/tts/{fname}"
-                        await client.send_private_voice(target_qq, docker_path)
-                        logger.info(f"[{self.bot_qq}] Relay voice sent to {target_qq}")
-                        voice_sent = True
-                        await _asyncio.sleep(1.0)
+                parts = self._split_reply(relay_text)
 
-                await client.send_private_msg(target_qq, relay_text)
-                logger.info(f"[{self.bot_qq}] Relay: {from_user_id}({from_role}) -> {target_qq}({to_role}){' +voice' if voice_sent else ''}")
+                # 语音转达：复用正常消息的分段 + 语音逻辑
+                if relay_voice and relay_voice in ("last", "all") and self.cfg.tts_enabled:
+                    if relay_voice == "all":
+                        tts_text = "".join(parts)
+                        audio = await self._tts_speak(tts_text, relay_voice_emotion or "撒娇")
+                        if audio:
+                            tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
+                            os.makedirs(tts_dir, exist_ok=True)
+                            fname = f"relay_{uuid.uuid4().hex[:8]}.wav"
+                            with open(os.path.join(tts_dir, fname), "wb") as wf:
+                                wf.write(audio)
+                            docker_path = f"/app/napcat/config/tts/{fname}"
+                            await client.send_private_voice(target_qq, docker_path)
+                            await asyncio.sleep(1.0)
+                            logger.info(f"[{self.bot_qq}] Relay voice(all) -> {target_qq}")
+                    else:  # last
+                        text_parts = parts[:-1] if len(parts) > 1 else []
+                        voice_part = parts[-1]
+                        for i, part in enumerate(text_parts):
+                            await client.send_private_msg(target_qq, part)
+                            if i < len(text_parts) - 1:
+                                await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+                        audio = await self._tts_speak(voice_part, relay_voice_emotion or "撒娇")
+                        if audio:
+                            tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
+                            os.makedirs(tts_dir, exist_ok=True)
+                            fname = f"relay_{uuid.uuid4().hex[:8]}.wav"
+                            with open(os.path.join(tts_dir, fname), "wb") as wf:
+                                wf.write(audio)
+                            docker_path = f"/app/napcat/config/tts/{fname}"
+                            await client.send_private_voice(target_qq, docker_path)
+                            await asyncio.sleep(1.0)
+                            logger.info(f"[{self.bot_qq}] Relay voice(last) -> {target_qq}")
+
+                # 文字部分分段发送
+                for i, part in enumerate(parts):
+                    # voice=all 时跳过文字（已经发过语音了）
+                    if relay_voice == "all":
+                        break
+                    # voice=last 时跳过最后一段（已经发过语音了）
+                    if relay_voice == "last" and i == len(parts) - 1:
+                        break
+                    await client.send_private_msg(target_qq, part)
+                    if i < len(parts) - 1:
+                        await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+
+                logger.info(f"[{self.bot_qq}] Relay: {from_user_id}({from_role}) -> {target_qq}({to_role}){' +voice' if relay_voice else ''}")
                 # 推送到前端
                 try:
                     from server.webui.routes import push_event
