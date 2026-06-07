@@ -208,9 +208,6 @@ class MessageHandler:
                         if len(names) > 1:
                             is_group = True
                             break
-                    if not is_group:
-                        self._convo_types[key] = "private"
-                        continue
                     self._convo_types[key] = "group" if is_group else "private"
             except Exception:
                 pass
