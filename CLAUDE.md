@@ -128,7 +128,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 启动恢复，无条数上限，`_convo_types` 记录群聊/私聊类型
 
 **上下文压缩：**
-- 群聊 8000 token 预算（reserve_for_reply=1500），私聊全量
+- 统一 128K token 预算（reserve_for_reply=4000），群聊私聊一致
 - 多次压缩摘要自动合并（`_coalesce_summaries`）
 - 群聊共享对话历史（key=group_id），私聊各自独立
 
