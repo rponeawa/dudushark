@@ -7,10 +7,11 @@ import asyncio
 import json
 import logging
 import random
+import re
 import time
 
 from server.bot.onebot_handler import onebot_server
-from server.bot.message_handler import get_message_handler
+from server.bot.message_handler import get_message_handler, SPLIT_PATTERN
 from server.bot.mood import get_mood
 
 logger = logging.getLogger("dudushark.proactive")
@@ -273,15 +274,20 @@ class ProactiveScheduler:
         try:
             is_group = bool(group_id)
             target = group_id if is_group else user_id
-            if is_group:
-                await client.send_group_msg(target, text)
-            else:
-                await client.send_private_msg(user_id, text)
+            parts = [p.strip() for p in SPLIT_PATTERN.split(text) if p.strip()] if text else []
+            for i, part in enumerate(parts):
+                part = re.sub(r"^>>\s*", "", part)
+                if is_group:
+                    await client.send_group_msg(target, part)
+                else:
+                    await client.send_private_msg(user_id, part)
+                if i < len(parts) - 1:
+                    await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
 
             now = self._now()
             self._last_global_ts = now
             self._last_conv_proactive[conv_key] = now
-            logger.info(f"[{self.bot_qq}] Proactive sent → {conv_key}")
+            logger.info(f"[{self.bot_qq}] Proactive sent → {conv_key} ({len(parts)} parts)")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Proactive send failed: {e}")
 
