@@ -134,7 +134,17 @@ class QzoneClient:
                     content=params,
                     headers=headers,
                 )
-                data = resp.json()
+                raw = resp.text
+                logger.info(f"[{self.bot_qq}] Qzone publish response: status={resp.status_code} body={raw[:300]}")
+                # Response may be JSONP callback: _Callback({...})
+                import re as _re
+                json_match = _re.search(r'\{.*\}', raw)
+                if not json_match:
+                    logger.error(f"[{self.bot_qq}] Qzone response is not JSON: {raw[:200]}")
+                    return False
+                data = json.loads(json_match.group()) if isinstance(json_match.group(), str) else {}
+                import json as _json
+                data = _json.loads(json_match.group())
                 code = data.get("code", -1)
                 if code == 0:
                     logger.info(f"[{self.bot_qq}] Qzone post OK: {content[:50]}...")
