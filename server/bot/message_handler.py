@@ -137,6 +137,7 @@ class MessageHandler:
         self._last_combined: dict[str, str] = {}
         self._last_relay_ts: float = 0.0
         self._last_relay_hash: str = ""
+        self._load_conversations()
 
     def _save_paused_groups(self):
         """持久化暂停列表到 bot_config.json。"""
@@ -146,7 +147,6 @@ class MessageHandler:
             save_instance_config(self.cfg)
         except Exception:
             pass
-        self._load_conversations()
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
         # 群聊所有用户共享对话历史，私聊各自独立
