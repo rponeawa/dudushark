@@ -140,9 +140,11 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 
 **主动消息 + 提醒：**
-- 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话
-- `_relationship_warmth()` 评分选人：对话多、关系近的人优先
-- 对方当天没发过消息不主动找；睡眠时段不发言
+- 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话（默认 0.15 × 精力）
+- **全局冷却**：两次主动消息间隔至少 30 分钟（`proactive_global_cooldown_sec: 1800`）
+- `_relationship_warmth()` 相对评分选人：以所有私聊中最活跃者的交换数为基准，亲密度 = 自己交换数 / 最高交换数 × 时间衰减
+- **私聊门槛**：亲密度 < 0.7 不主动找（不够熟不打扰）
+- 对方当天没给嘟嘟发过消息不主动找；睡眠时段不发言
 - 提醒始终私聊发送，不受 sleep/cooldown 限制
 - 有提醒时不创建记忆（避免重复存储）
 

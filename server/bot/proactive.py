@@ -135,8 +135,8 @@ class ProactiveScheduler:
     def _relationship_warmth(self, conv_key: str, handler) -> float:
         """0.0–1.0 score reflecting how close Dudu feels to this person.
 
-        Based on total exchange count and recency.  More messages →
-        warmer.  Long silence → cools down.
+        Relative: bond is computed proportionally to the person with the most
+        exchanges across all private chats, so warmth is always distributed.
         """
         msgs = handler._conversations.get(conv_key, [])
         if not msgs:
@@ -146,8 +146,14 @@ class ProactiveScheduler:
         last_ts = max((m.get("ts", 0) for m in msgs), default=0)
         age_hours = (self._now() - last_ts) / 3600
 
-        # Frequent conversation = close bond
-        bond = min(1.0, exchanges / 60)
+        # Relative bond: proportional to the most active private chatter
+        all_ex = [
+            sum(1 for m in ms if m.get("role") in ("user", "assistant"))
+            for key, ms in handler._conversations.items()
+            if handler._convo_types.get(key) == "private"
+        ]
+        max_ex = max(all_ex) if all_ex else 1
+        bond = exchanges / max(max_ex, 10)
         # Recency decay: still warm within 24h, fades over a week
         recency = max(0.1, 1.0 - age_hours / 168)
         return bond * recency
@@ -178,8 +184,13 @@ class ProactiveScheduler:
             # Base weight: private vs group
             w = self._cfg.proactive_private_probability if not group_id else self._cfg.proactive_group_probability
 
+            # 私聊亲密度门槛：不够熟不主动找
+            warmth = self._relationship_warmth(conv_key, handler)
+            if not group_id and warmth < 0.7:
+                continue
+
             # Relationship warmth bonus: closer people get priority
-            w *= 0.5 + self._relationship_warmth(conv_key, handler)
+            w *= 0.5 + warmth
 
             # Recency: very recent (≤30 min) gets a soft boost, very stale (>7 d) gets a penalty
             idle_minutes = (now - last_ts) / 60

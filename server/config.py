@@ -46,11 +46,11 @@ class BotConfig(BaseModel):
     onebot_ws_port: int = 8080
     # Proactive messaging
     proactive_enabled: bool = True
-    proactive_global_cooldown_sec: int = 600
+    proactive_global_cooldown_sec: int = 1800
     proactive_per_conv_cooldown_sec: int = 2700
     proactive_group_probability: float = 0.30
     proactive_private_probability: float = 0.30
-    proactive_curiosity_threshold: float = 0.35
+    proactive_curiosity_threshold: float = 0.15
     # TTS (语音合成)
     tts_enabled: bool = True
     tts_voice: str = "ruanmengnvsheng"
