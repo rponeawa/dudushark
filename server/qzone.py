@@ -134,16 +134,29 @@ class QzoneClient:
                     headers=headers,
                 )
                 raw = resp.text
-                # Response is HTML-wrapped JSONP: <html>...cb({...});</script>
-                # Extract the callback JSON — it's the outermost {…} after "cb("
-                cb_match = _re.search(r'cb\s*\(\s*(\{.*\})\s*\)', raw, _re.DOTALL)
-                if cb_match:
-                    try:
-                        data = json.loads(cb_match.group(1))
-                    except json.JSONDecodeError:
-                        return False, f"JSON 解析失败: {cb_match.group(1)[:200]}"
-                else:
-                    # Fallback: try parsing entire response as JSON
+                # Response is HTML-wrapped JSONP:
+                # <html><body><script>...cb=frameElement.callback;...cb({"code":0,...});</script></body></html>
+                # Find the last "cb(" and extract balanced braces
+                data = None
+                cb_pos = raw.rfind("cb(")
+                if cb_pos >= 0:
+                    json_start = raw.find("{", cb_pos)
+                    if json_start >= 0:
+                        depth = 0
+                        json_end = json_start
+                        for i in range(json_start, len(raw)):
+                            if raw[i] == "{":
+                                depth += 1
+                            elif raw[i] == "}":
+                                depth -= 1
+                                if depth == 0:
+                                    json_end = i + 1
+                                    break
+                        try:
+                            data = json.loads(raw[json_start:json_end])
+                        except json.JSONDecodeError:
+                            return False, f"JSON 解析失败: {raw[json_start:json_end][:200]}"
+                if data is None:
                     try:
                         data = json.loads(raw)
                     except json.JSONDecodeError:
