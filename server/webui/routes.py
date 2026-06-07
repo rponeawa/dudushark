@@ -264,6 +264,84 @@ async def resume_group(qq: str, group_id: str):
     return {"ok": True}
 
 
+# ---- QQ 空间 ----
+
+@router.get("/instances/{qq}/qzone/posts")
+async def get_qzone_posts(qq: str):
+    """获取本地存档的 QQ 空间说说列表。"""
+    from server.config import get_qzone_posts_path
+    path = get_qzone_posts_path(qq)
+    posts = []
+    if path.exists():
+        try:
+            posts = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            posts = []
+    return {"posts": posts[:50]}
+
+
+class QzonePostBody(BaseModel):
+    content: str | None = None
+
+
+@router.post("/instances/{qq}/qzone/post")
+async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
+    """手动发一条 QQ 空间说说。content 为空时自动生成。"""
+    from server.qzone import QzoneClient
+
+    content = body.content if body and body.content else None
+    if not content:
+        # 自动生成内容
+        handler = get_message_handler(qq)
+        from datetime import datetime, timezone, timedelta
+        from server.bot.proactive import ProactiveScheduler
+        sched_cls = ProactiveScheduler
+        today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+        today_diary = handler.memory.recall_by_date("__diary__", today_str)
+        if today_diary:
+            diary_text = "\n".join(f"- {d['text'][:200]}" for d in today_diary[:5])
+            diary_section = f"## 今天发生的事\n{diary_text}"
+        else:
+            diary_section = "## 今天\n今天没有什么特别的事发生。随便写点什么吧～"
+        prompt = sched_cls.QZONE_PROMPT.format(diary_section=diary_section)
+        try:
+            resp = await handler._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=300,
+                temperature=0.9,
+            )
+            content = resp.strip()
+            if content.startswith('"') and content.endswith('"'):
+                content = content[1:-1]
+            content = content[:200]
+        except Exception as e:
+            raise HTTPException(500, f"生成内容失败: {e}")
+
+    if not content:
+        raise HTTPException(500, "生成内容为空")
+
+    qzone = QzoneClient(qq)
+    ok = await qzone.publish_post(content)
+    if ok:
+        # 保存到本地
+        from server.config import get_qzone_posts_path
+        path = get_qzone_posts_path(qq)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        posts = []
+        if path.exists():
+            try:
+                posts = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                posts = []
+        posts.insert(0, {"content": content, "created": time.time()})
+        posts = posts[:200]
+        path.write_text(json.dumps(posts, ensure_ascii=False, indent=2))
+        logger.info(f"[{qq}] WebUI manual Qzone post: {content[:50]}")
+        return {"ok": True, "content": content}
+    else:
+        raise HTTPException(500, "发帖失败，可能是 Cookie 获取失败或网络问题")
+
+
 @router.post("/instances/create")
 async def create_instance(qq: str, napcat_path: str = ""):
     cfg = load_global_config()

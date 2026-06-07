@@ -63,7 +63,8 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
                  ├─ memory/vector_store.py             (ChromaDB + SiliconFlow embedding)
                  ├─ memory/context.py                  (上下文压缩，摘要合并)
                  ├─ search/bing.py                     (Bing/DDG HTML 解析搜索)
-                 ├─ bot/proactive.py                   (主动消息调度 + 提醒触发)
+                 ├─ bot/proactive.py                   (主动消息调度 + 提醒触发 + QQ空间发帖)
+                 ├─ qzone.py                            (QQ 空间说说 API：发帖 + 获取列表)
                  ├─ napcat/manager.py                  (NapCatQQ 配置生成，WebUI API 交互)
                  └─ webui/routes.py                    (REST API + WS 事件推送)
 ```
@@ -110,6 +111,15 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - `/say [情绪] 文本` 管理员命令测试语音（私聊/群聊均可，不落 JSONL）
 - 情绪：撒娇/高兴/非常高兴/悲伤/生气/非常生气/兴奋/惊讶/困惑/恐惧
 - TTS 模型/音色、ASR 模型/提示词均在 WebUI 可配
+
+**QQ 空间系统：**
+- 认证：NapCat `get_credentials`/`get_cookies` 获取 `qzone.qq.com` Cookie → `p_skey` 计算 `g_tk`
+- 每次 API 调用都重新获取 Cookie 避免过期
+- 发帖：POST `emotion_cgi_publish_v6`，读取：GET `emotion_cgi_msglist_v6`
+- 每日自动发帖：清醒时段（8-22点）10% 概率触发，内容基于当天 diary 记忆，无则随机
+- 发帖记录保存在 `data/instances/{qq}/qzone_posts.json`，最多 200 条
+- 发帖状态（当天是否已发）保存在 `data/instances/{qq}/qzone_state.json`
+- WebUI 可手动触发发帖（自动生成内容）并查看历史
 
 **对话持久化：**
 - JSONL 文件落盘 `data/instances/{qq}/conversations/{key}.jsonl`

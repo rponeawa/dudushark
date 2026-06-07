@@ -242,11 +242,120 @@ class ProactiveScheduler:
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Reminder send failed: {e}")
 
+    # ── QQ 空间发帖 ───────────────────────────────────────
+
+    QZONE_PROMPT = """你是嘟嘟鲨鱼——来自鲨鱼星的赛博大鲨鱼。你要写一条 QQ 空间说说。
+
+## 规则
+- 像赛博大鲨鱼在写空间说说，不是AI小助手
+- 自然、可爱，可以带点傲娇
+- 用"鱼"自称，可以加"啊呜～"
+- 一条就好，不要太长（50字以内为佳）
+- 不要用引号包裹内容，直接输出文字
+
+{diary_section}
+
+现在，写一条空间说说吧："""
+
+    def _today_str(self) -> str:
+        from datetime import datetime, timezone, timedelta
+        return datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+
+    def _qzone_posted_today(self) -> bool:
+        from server.config import get_qzone_state_path
+        path = get_qzone_state_path(self.bot_qq)
+        if not path.exists():
+            return False
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            return state.get("last_post_date") == self._today_str()
+        except Exception:
+            return False
+
+    def _mark_qzone_posted(self):
+        from server.config import get_qzone_state_path
+        path = get_qzone_state_path(self.bot_qq)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"last_post_date": self._today_str()}, ensure_ascii=False))
+
+    async def _generate_qzone_content(self) -> str | None:
+        """用 LLM 生成一条空间说说内容。基于今天的 diary 或随机。"""
+        handler = get_message_handler(self.bot_qq)
+        today_diary = handler.memory.recall_by_date("__diary__", self._today_str())
+
+        if today_diary:
+            diary_text = "\n".join(f"- {d['text'][:200]}" for d in today_diary[:5])
+            diary_section = f"## 今天发生的事\n{diary_text}"
+        else:
+            diary_section = "## 今天\n今天没有什么特别的事发生。随便写点什么吧～"
+
+        prompt = self.QZONE_PROMPT.format(diary_section=diary_section)
+
+        try:
+            resp = await handler._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=300,
+                temperature=0.9,
+            )
+            text = resp.strip()
+            # 去掉可能的引号包裹
+            if text.startswith('"') and text.endswith('"'):
+                text = text[1:-1]
+            return text[:200] if text else None
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] Qzone content generation failed: {e}")
+            return None
+
+    async def _save_qzone_post(self, content: str):
+        """保存发帖记录到本地。"""
+        from server.config import get_qzone_posts_path
+        path = get_qzone_posts_path(self.bot_qq)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        posts = []
+        if path.exists():
+            try:
+                posts = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                posts = []
+        posts.insert(0, {"content": content, "created": self._now()})
+        # 最多保留 200 条
+        posts = posts[:200]
+        path.write_text(json.dumps(posts, ensure_ascii=False, indent=2))
+
+    async def _check_qzone_post(self):
+        """检查是否需要发空间说说。每天清醒时段随机触发一次。"""
+        if not self._cfg.qzone_enabled:
+            return
+        if self._qzone_posted_today():
+            return
+        if self._is_sleep_time():
+            return
+        # 10% 概率触发（多次 cycle 后大概率命中）
+        if random.random() > 0.10:
+            return
+
+        content = await self._generate_qzone_content()
+        if not content:
+            return
+
+        from server.qzone import QzoneClient
+        qzone = QzoneClient(self.bot_qq)
+        ok = await qzone.publish_post(content)
+        if ok:
+            await self._save_qzone_post(content)
+            self._mark_qzone_posted()
+            logger.info(f"[{self.bot_qq}] Qzone auto-posted: {content[:50]}")
+        else:
+            logger.warning(f"[{self.bot_qq}] Qzone auto-post failed, will retry next cycle")
+
     # ── main cycle ─────────────────────────────────────────
 
     async def _cycle(self):
         # Reminders always fire (unconditional)
         await self._check_reminders()
+
+        # QQ 空间发帖检查（不依赖主动消息概率，独立运行）
+        await self._check_qzone_post()
 
         if not self._should_speak_now():
             return

@@ -68,6 +68,8 @@ class BotConfig(BaseModel):
     admins_description: str = ""
     # 被暂停的群聊列表
     paused_groups: list[str] = []
+    # QQ 空间自动发说说
+    qzone_enabled: bool = True
     # 家族记忆 + 附带指令（仅家人私聊注入，不提交到 GitHub）
     family_memory: str = ""
     family_note: str = ""
@@ -121,6 +123,13 @@ def get_convo_dir(qq: str) -> Path:
 
 def get_reminders_path(qq: str) -> Path:
     return get_instance_dir(qq) / "reminders.json"
+
+def get_qzone_posts_path(qq: str) -> Path:
+    return get_instance_dir(qq) / "qzone_posts.json"
+
+def get_qzone_state_path(qq: str) -> Path:
+    return get_instance_dir(qq) / "qzone_state.json"
+
 
 def get_chroma_dir(qq: str) -> Path:
     p = get_instance_dir(qq) / "chroma"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, SystemStatus, InstanceDetailStatus, MoodState, Reminder } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, Reminder, QzonePost } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -70,6 +70,9 @@ export default function Status() {
   const [detail, setDetail] = useState<InstanceDetailStatus | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [pausedGroups, setPausedGroups] = useState<string[]>([]);
+  const [qzonePosts, setQzonePosts] = useState<QzonePost[]>([]);
+  const [qzonePosting, setQzonePosting] = useState(false);
+  const [qzoneMsg, setQzoneMsg] = useState("");
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = async () => {
@@ -106,9 +109,11 @@ export default function Status() {
     if (!detailQQ) return;
     getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => setReminders([]));
     getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups)).catch(() => setPausedGroups([]));
+    getQzonePosts(detailQQ).then((d) => setQzonePosts(d.posts)).catch(() => setQzonePosts([]));
     const t = setInterval(() => {
       getReminders(detailQQ).then((d) => setReminders(d.reminders)).catch(() => {});
       getPausedGroups(detailQQ).then((d) => setPausedGroups(d.paused_groups)).catch(() => {});
+      getQzonePosts(detailQQ).then((d) => setQzonePosts(d.posts)).catch(() => {});
     }, 5000);
     return () => clearInterval(t);
   }, [detailQQ]);
@@ -319,6 +324,54 @@ export default function Status() {
           </div>
         </div>
       )}
+
+      {/* QQ 空间 */}
+      <div className="panel">
+        <div className="panel-header">
+          <h2>QQ 空间</h2>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={qzonePosting || !detailQQ}
+            onClick={async () => {
+              setQzonePosting(true);
+              setQzoneMsg("");
+              try {
+                const r = await qzoneManualPost(detailQQ);
+                setQzoneMsg(`已发送: ${r.content}`);
+                getQzonePosts(detailQQ).then((d) => setQzonePosts(d.posts));
+              } catch (e: any) {
+                setQzoneMsg(`失败: ${e.message}`);
+              }
+              setQzonePosting(false);
+              setTimeout(() => setQzoneMsg(""), 3000);
+            }}
+          >
+            {qzonePosting ? "发送中..." : "发一条说说"}
+          </button>
+        </div>
+        {qzoneMsg && (
+          <div style={{ padding: "6px 12px", fontSize: "0.82rem", color: qzoneMsg.startsWith("失败") ? "var(--red)" : "var(--green)" }}>
+            {qzoneMsg}
+          </div>
+        )}
+        <div className="panel-body">
+          {qzonePosts.length === 0 ? (
+            <div className="empty-state">暂无说说记录</div>
+          ) : (
+            qzonePosts.slice(0, 10).map((post, i) => (
+              <div key={i} style={{
+                padding: "8px 0", borderBottom: i < qzonePosts.length - 1 ? "1px solid var(--border)" : "none",
+                fontSize: "0.85rem",
+              }}>
+                <div style={{ color: "var(--text-dim)", fontSize: "0.76rem", fontFamily: "monospace", marginBottom: 2 }}>
+                  {new Date(post.created * 1000).toLocaleString("zh-CN")}
+                </div>
+                <div>{post.content}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* Paused Groups */}
       <div className="panel">

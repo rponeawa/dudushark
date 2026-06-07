@@ -168,3 +168,12 @@ export const getReminders = (qq: string) => req<{ reminders: Reminder[] }>(`/ins
 export const getPausedGroups = (qq: string) => req<{ paused_groups: string[] }>(`/instances/${qq}/paused_groups`);
 export const pauseGroup = (qq: string, group_id: string) => req<{ ok: boolean }>(`/instances/${qq}/paused_groups/${group_id}/pause`, { method: "POST" });
 export const resumeGroup = (qq: string, group_id: string) => req<{ ok: boolean }>(`/instances/${qq}/paused_groups/${group_id}/resume`, { method: "POST" });
+
+// QQ 空间
+export interface QzonePost { content: string; created: number; }
+export const getQzonePosts = (qq: string) => req<{ posts: QzonePost[] }>(`/instances/${qq}/qzone/posts`);
+export const qzoneManualPost = (qq: string, content?: string) =>
+  req<{ ok: boolean; content: string }>(`/instances/${qq}/qzone/post`, {
+    method: "POST",
+    body: JSON.stringify(content ? { content } : {}),
+  });
