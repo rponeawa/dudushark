@@ -430,33 +430,13 @@ class MessageHandler:
                 return [ReplyPart("TTS 失败...啊呜～")]
             return []
 
-        # 管理员发空间：硬过滤"空间"关键词 + LLM 判断意图
+        # 管理员发空间：管理员 + 硬关键词"空间/说说/动态"才注入 qzone 字段，主 LLM 自行判断是否要发
         # 合并消息场景：检查任意说话人是否为管理员
         _qzone_admin = is_sender_admin or any(
             any(str(a.get("qq", "")) == uid for a in self.cfg.admins)
             for uid in (names_map.values() if names_map else [])
         )
-        _qzone_triggered = False
-        if _qzone_admin and "空间" in text:
-         try:
-            _qzone_check_prompt = (
-                "判断用户是否在要求机器人发 QQ 空间说说。"
-                "只有明确要求发空间/发说说/发动态才返回 YES，否则返回 NO。\n"
-                f"用户消息：{text}\n"
-                "回答 YES 或 NO："
-            )
-            try:
-                _qzone_intent = await _call_llm(
-                    self.cfg.llm.base_url, self.cfg.llm.api_key,
-                    {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_check_prompt}],
-                     "max_tokens": 600, "temperature": 0.1},
-                )
-            except Exception:
-                _qzone_intent = "NO"
-            if "YES" in _qzone_intent.upper():
-                _qzone_triggered = True
-         except Exception as _qzone_err:
-             logger.error(f"[{self.bot_qq}] Qzone intent check error: {_qzone_err}")
+        _qzone_keyword = _qzone_admin and any(kw in text for kw in ("空间", "说说", "动态"))
 
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
         _is_family = any(
@@ -504,12 +484,11 @@ class MessageHandler:
         tz8 = timezone(__import__("datetime").timedelta(hours=8))
         cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
         json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
-        # 空间发帖：如果意图确认，注入 qzone 字段
-        if _qzone_triggered:
+        # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
+        if _qzone_keyword:
             json_prompt += (
-                "\n\n【重要】用户让你发 QQ 空间说说。你必须在 JSON 中额外输出 qzone 字段："
-                "\n- qzone: 空间说说内容（字符串）。50字以内，自然可爱。如果用户指定了内容就按说的写，没指定就自己想一条。"
-                "\n你的 reply 正常回复对方（比如表示你去发了），qzone 填你要发到空间的内容。"
+                "\n\n- qzone: 发 QQ 空间说说的内容（字符串），自然可爱，不用刻意压短。"
+                "你觉得值得发一条说说的时候才填（比如对方让你发、或者聊到了有意思的事想分享），平时留 null 就好。"
             )
         messages.append({"role": "system", "content": json_prompt})
 
@@ -908,11 +887,11 @@ class MessageHandler:
             if relay_info and isinstance(relay_info, dict) and is_sender_admin:
                 if await self._should_relay(text):
                     asyncio.create_task(self._relay_message(relay_info, user_id))
-            # Qzone 发帖：如果主 LLM 输出了 qzone 字段，异步发帖
+            # Qzone 发帖：主 LLM 输出了 qzone 字段 → 独立 LLM 二次判断
             _qzone_content = data.get("qzone")
-            if _qzone_triggered and _qzone_content and isinstance(_qzone_content, str):
-                _qzone_content = _qzone_content.strip().strip('"')[:200]
-                if _qzone_content:
+            if _qzone_keyword and _qzone_content and isinstance(_qzone_content, str):
+                _qzone_content = _qzone_content.strip().strip('"')[:500]
+                if _qzone_content and await self._should_post_qzone(_qzone_content, text, user_id, group_id):
                     asyncio.create_task(self._post_qzone(_qzone_content, user_id, group_id))
         else:
             reply_text = full_reply
@@ -1181,6 +1160,35 @@ class MessageHandler:
             return "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
         except Exception:
             return False
+
+    async def _should_post_qzone(self, qzone_content: str, text: str, user_id: str = "", group_id: str = "") -> bool:
+        """独立 LLM 二次判断是否真的应该发这条空间说说。参考 skip/memory 的二次检查模式。"""
+        try:
+            llm = self.cfg.llm
+            persona_brief = (
+                "嘟嘟鲨鱼是一只来自鲨鱼星的赛博大鲨鱼QQ机器人。自称\"鱼\"，口头禅\"啊呜～\"。"
+                "傲娇、善良、喜欢睡觉、喜欢软绵绵的东西。有自己的QQ空间，会发说说记录生活和心情。"
+            )
+            prompt = (
+                f"{persona_brief}\n\n"
+                "你是空间说说过滤器。鱼的主LLM已经决定要发这条说说，你来最后把关——只有在明显不该发的时候才阻止。\n"
+                "阻止（NO）：内容明显不当、完全莫名其妙和对话毫无关系、在被人冒犯/生气时发不合时宜的内容、纯水内容没有分享价值。\n"
+                "放行（YES）：正常的空间说说，分享心情、日常、有趣的事、回应别人的要求。\n"
+                "鱼已经想好要发了，除非确实不该发，否则放行。\n"
+                "只输出 YES 或 NO。"
+            )
+            payload = {
+                "model": llm.model, "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"对话内容：{text[:300]}\n\n说说内容：{qzone_content[:500]}"},
+                ], "temperature": 0.3, "max_tokens": 800,
+            }
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=15)
+            decision = "YES" in raw.strip().upper() and "NO" not in raw.strip().upper()
+            logger.info(f"[{self.bot_qq}] Qzone post check: {qzone_content[:30]}... -> {'POST' if decision else 'SKIP'} (raw={raw.strip()[:80]})")
+            return decision
+        except Exception:
+            return False  # 出错时不发，宁可漏发不误发
 
     async def _relay_message(self, relay: dict, from_user_id: str):
         """代传话给另一位管理员。仅管理员之间可用。"""

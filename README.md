@@ -2,7 +2,7 @@
 
 一只来自鲨鱼星的赛博大鲨鱼 QQ 机器人，基于 [NapCatQQ](https://github.com/NapNeko/NapCatQQ) + OneBot v11 反向 WebSocket 协议。
 
-**后端**: Python/FastAPI  **前端**: React/Vite/TypeScript  **向量记忆**: ChromaDB + SiliconFlow BAAI/bge-m3  **LLM**: step-3.7-flash (多模态)
+**后端**: Python/FastAPI  **前端**: React/Vite/TypeScript  **向量记忆**: ChromaDB + SiliconFlow BAAI/bge-m3  **LLM**: step-3.7-flash (多模态，支持函数调用)
 
 ## 特性
 
@@ -11,18 +11,19 @@
 - **向量记忆** — ChromaDB + BAAI/bge-m3，LLM 自主增删改。支持全局记忆、群聊记忆、家族记忆
 - **多模态理解** — 支持图片、表情包、语音输入。语音自动转文字（ASR），表情包区分普通图片
 - **语音发送** — LLM 自主决定发语音（撒娇/被要求时），支持情绪控制。StepFun TTS + WebUI 可配
-- **网络搜索** — 函数调用式搜索，先说"啊呜～鱼去搜一下～"再异步返回结果
-- **JSON 格式** — 一次 LLM 调用输出 reply + quote + memory + diary + group_memory + remind + relay
+- **网络搜索** — 函数调用式搜索，先说"啊呜～鱼去搜一下～"再异步搜索+二次 LLM 回复
+- **JSON 格式** — 一次 LLM 调用输出 reply + quote + memory + diary + group_memory + remind + relay + qzone + search
 - **256K 上下文** — 超出自动压缩，prompt cache 命中率优化
 - **消息合并** — 同用户连续消息合并后一次回复，群聊多人共享合并窗口
-- **网络搜索** — Bing/DDG HTML 解析，LLM 自主触发
 - **群聊静默** — SKIP 为主，独立 LLM 预判 + 二次验证，睡眠时段更严格
 - **全局心情系统** — 小时曲线 x 睡眠节律，22点后犯困 0-7点睡着，前端实时显示
 - **主动消息** — 欲望驱动，关系温度评分，睡眠/当日未联系免打扰
 - **群聊暂停** — `/pause` `/resume` 管理员暂停/恢复群消息，不落盘
 - **定时提醒** — 一次性定时任务，LLM 自主计算时间戳，私聊发送，前端可查看
+- **QQ 空间发帖** — 管理员触发 + 每日自动发帖，主 LLM 写内容 + 独立 LLM 二次把关
 - **管理员代传话** — 独立 LLM 预判验证，仅私聊且明确要求时触发，三层防护防误触
 - **记忆质量控制** — 独立 LLM 判断是否值得记录，防琐碎信息泛滥
+- **语音测试命令** — `/say [情绪] 文本` 管理员快速测试 TTS 语音
 - **Web 管理面板** — 密码鉴权，侧边栏+顶栏，记忆管理，对话查看，定时提醒显示
 - **隐私保护** — 管理描述和家族记忆仅私聊注入，群聊不暴露
 - **速率保护** — 滑动窗口 8次/60s，指数退避重试
@@ -65,7 +66,8 @@ NapCatQQ (Docker)
                  ├─ bot/message_handler.py   (合并缓冲 → LLM → 拆分)
                  ├─ bot/persona.py           (人设)
                  ├─ bot/mood.py               (心情/睡眠)
-                 ├─ bot/proactive.py         (主动消息 + 提醒调度)
+                 ├─ bot/proactive.py         (主动消息 + 提醒调度 + QQ空间自动发帖)
+                 ├─ qzone.py                 (QQ 空间说说 API)
                  ├─ memory/manager.py        (MD 记忆 CRUD)
                  ├─ memory/vector_store.py   (ChromaDB + embedding)
                  ├─ memory/context.py        (上下文压缩)
@@ -102,6 +104,12 @@ SKIP 三层防护：
 - 群聊合并消息时检索所有说话人的记忆
 - 已有标题列表展示给 LLM，便于 upsert 更新而非新建
 - `__diary__` 全局记忆，`__group__<id>` 群聊记忆
+
+### QQ 空间发帖
+
+- **管理员触发**：管理员消息含"空间/说说/动态"关键词时，注入 qzone JSON 字段。主 LLM 自行判断是否写内容，独立 LLM 二次把关后才发帖
+- **每日自动发帖**：清醒时段（8-22点）10% 概率触发，基于当天 diary 记忆生成内容
+- WebUI 可手动触发发帖并查看历史
 
 ### 定时提醒
 

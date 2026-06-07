@@ -55,6 +55,7 @@ PYTHONPATH=. .venv/bin/python tests/test_reminders.py
 NapCatQQ (Docker: mlikiowa/napcat-docker)
   └─ WS → ws://172.17.0.1:8080/onebot/v11/ws/{qq}   (OneBot v11 反向WS)
             └─ server/main.py                          (FastAPI + WS 端点)
+                 ├─ server/config.py                   (全局配置 + BotConfig 模型定义)
                  ├─ bot/onebot_handler.py              (OneBot 协议解析 + 多模态图片提取)
                  ├─ bot/message_handler.py             (消息合并缓冲 → LLM 调用 → 回复拆分)
                  ├─ bot/persona.py                     (System prompt 人设定义)
@@ -77,7 +78,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 3. 消息类型事件用 `create_task` 调度到后台，不阻塞 WS 接收循环
 4. `message_handler.handle()` 使用 Future 机制合并同用户连续消息
 5. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
-6. LLM 返回 JSON：`{"reply":"...","quote":bool,"voice":null|"all"|"last","voice_emotion":null|"...","memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...}}`
+6. LLM 返回 JSON：`{"reply":"...","quote":bool,"quote_index":null|int,"voice":null|"all"|"last","voice_emotion":null|"...","memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...},"qzone":null|"...","search":"..."}`
 7. `voice` 非 null 时：发送语音（StepFun TTS step-tts-2），`voice_emotion` 控制情绪
 8. 长回复按 `。！？\n～` 断句拆分发送，不限段数，间隔 `max(2.0, len*0.08+1.0)`
 9. `[SKIP]` 不回复，LLM 调用失败返回 `[]` 不回复
@@ -116,7 +117,8 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 认证：NapCat `get_credentials`/`get_cookies` 获取 `qzone.qq.com` Cookie → `p_skey` 计算 `g_tk`
 - 每次 API 调用都重新获取 Cookie 避免过期
 - 发帖：POST `emotion_cgi_publish_v6`，读取：GET `emotion_cgi_msglist_v6`
-- 每日自动发帖：清醒时段（8-22点）10% 概率触发，内容基于当天 diary 记忆，无则随机
+- **管理员触发发帖**：管理员消息含"空间/说说/动态"关键词 → 注入 qzone JSON 字段 → 主 LLM 自行判断是否填内容 → 独立 LLM 二次验证（`_should_post_qzone`）→ 通过后异步发帖
+- **每日自动发帖**：清醒时段（8-22点）10% 概率触发，内容基于当天 diary 记忆，无则随机
 - 发帖记录保存在 `data/instances/{qq}/qzone_posts.json`，最多 200 条
 - 发帖状态（当天是否已发）保存在 `data/instances/{qq}/qzone_state.json`
 - WebUI 可手动触发发帖（自动生成内容）并查看历史
@@ -164,7 +166,8 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - forget: `{"category":"类别","title":"标题"}` — 删除记忆
 - remind: `{"at_utc": Unix秒, "content": "提醒内容"}` — 一次性定时提醒
 - relay: `{"to_role": "角色名", "content": "转达内容"}` — 管理员间代传话
-- say+search: `{"say":"...","search":"..."}` — 多步搜索
+- qzone: 字符串，QQ 空间说说内容。仅管理员消息且含关键词时字段可见，主 LLM 自行判断是否填
+- search: `"search":"关键词"` — LLM 请求网络搜索，与 reply 同时输出，系统异步执行搜索+二次 LLM
 
 **角色/管理员系统：**
 - `BotConfig.admins` 列表，运行时 QQ 匹配 → 用户名后标注【角色】标签
@@ -192,11 +195,13 @@ data/instances/{qq}/
   ├── memories/{user_id}/*.md
   ├── chroma/
   ├── conversations/{key}.jsonl
-  └── reminders.json
+  ├── reminders.json
+  ├── qzone_posts.json
+  └── qzone_state.json
 ```
 
 ## API 路由
 
 所有 API 前缀 `/api`，WebSocket `/api/ws/widget`。除 `/api/auth/login` 和 `/api/ws/widget` 外均需 Bearer token 鉴权。
 
-关键端点：`/auth/login`、`/status`、`/instances` CRUD、`/instances/{qq}/config`、`/instances/{qq}/memories/{user_id}`、`/instances/{qq}/conversations/{key}`、`/instances/{qq}/reminders`。
+关键端点：`/auth/login`、`/status`、`/instances` CRUD、`/instances/{qq}/config`、`/instances/{qq}/memories/{user_id}`、`/instances/{qq}/conversations/{key}`、`/instances/{qq}/reminders`、`/instances/{qq}/qzone/posts`、`/instances/{qq}/paused_groups`。
