@@ -132,8 +132,11 @@ class MessageHandler:
         self._conversations: dict[str, list[dict]] = {}
         self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
         self._paused_groups: set[str] = set(self.cfg.paused_groups or [])  # 被管理员暂停的群
+        self._lock = asyncio.Lock()
         self._buffers: dict[tuple[str, str], dict] = {}
         self._last_combined: dict[str, str] = {}
+        self._last_relay_ts: float = 0.0
+        self._last_relay_hash: str = ""
 
     def _save_paused_groups(self):
         """持久化暂停列表到 bot_config.json。"""
@@ -143,12 +146,6 @@ class MessageHandler:
             save_instance_config(self.cfg)
         except Exception:
             pass
-        self._lock = asyncio.Lock()
-        # 缓冲：(conv_key, user_name) -> {"texts": [...], "msg_ids": [...], "first_ts": float, "futures": [Future]}
-        self._buffers: dict[tuple[str, str], dict] = {}
-        self._last_combined: dict[str, str] = {}  # conv_key -> 最近一次合并的全文
-        self._last_relay_ts: float = 0.0  # 防止短时间内重复转达
-        self._last_relay_hash: str = ""
         self._load_conversations()
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
@@ -380,8 +377,9 @@ class MessageHandler:
 
         # 群聊暂停/恢复：被暂停的群直接跳过，不落盘
         if is_group and group_id in self._paused_groups:
-            # 检查是否是管理员发的 /resume
-            if is_sender_admin and text.strip().startswith("/resume"):
+            logger.info(f"[{self.bot_qq}] Group {group_id} is paused, checking /resume: admin={is_sender_admin}, text={text[:80]}")
+            # 检查是否是管理员发的 /resume（可能带回复/@前缀）
+            if is_sender_admin and "/resume" in text:
                 self._paused_groups.discard(group_id)
                 self._save_paused_groups()
                 logger.info(f"[{self.bot_qq}] Group {group_id} resumed by admin {user_id}")
@@ -389,8 +387,8 @@ class MessageHandler:
             # 其他消息全部忽略，不落盘
             return []
 
-        # /pause 命令：管理员暂停群聊
-        if is_sender_admin and is_group and text.strip().startswith("/pause"):
+        # /pause 命令：管理员暂停群聊（可能带回复/@前缀）
+        if is_sender_admin and is_group and "/pause" in text:
             self._paused_groups.add(group_id)
             self._save_paused_groups()
             logger.info(f"[{self.bot_qq}] Group {group_id} paused by admin {user_id}")
