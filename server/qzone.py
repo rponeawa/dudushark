@@ -5,7 +5,9 @@ QQ 空间 API — 发说说 / 获取说说列表。
 从 p_skey 计算 g_tk（DJB2 变体）。每次操作都重新获取 Cookie 以避免过期。
 """
 
+import json
 import logging
+import re as _re
 from urllib.parse import urlencode
 
 import httpx
@@ -135,16 +137,15 @@ class QzoneClient:
                     headers=headers,
                 )
                 raw = resp.text
-                logger.info(f"[{self.bot_qq}] Qzone publish response: status={resp.status_code} body={raw[:300]}")
-                # Response may be JSONP callback: _Callback({...})
-                import re as _re
-                json_match = _re.search(r'\{.*\}', raw)
+                logger.info(f"[{self.bot_qq}] Qzone publish response: status={resp.status_code} body={raw[:500]}")
+                # Response is HTML-wrapped JSONP: <html>...<script>...cb({...});</script>...
+                # Find the last JSON object in the response
+                json_match = _re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw)
                 if not json_match:
-                    logger.error(f"[{self.bot_qq}] Qzone response is not JSON: {raw[:200]}")
+                    logger.error(f"[{self.bot_qq}] Qzone response has no JSON object: {raw[:300]}")
                     return False
-                data = json.loads(json_match.group()) if isinstance(json_match.group(), str) else {}
-                import json as _json
-                data = _json.loads(json_match.group())
+                # Take the last (deepest) JSON match — that's the actual data
+                data = json.loads(json_match[-1])
                 code = data.get("code", -1)
                 if code == 0:
                     logger.info(f"[{self.bot_qq}] Qzone post OK: {content[:50]}...")
