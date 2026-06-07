@@ -619,7 +619,7 @@ class MessageHandler:
 
         # 最终提示放在 user_msg 之前，不影响缓存
         if voice_transcripts:
-            messages.append({"role": "system", "content": "（语音已自动转写为文字，直接回复内容即可，不需要说你听不到语音。）"})
+            messages.append({"role": "system", "content": "（对方发的是语音消息，说明ta喜欢用语音聊天。你回复时也应该更大概率发语音——用\"last\"甚至\"all\"都可以，不用太克制。）"})
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
         messages.append(user_msg)
