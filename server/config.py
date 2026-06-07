@@ -57,7 +57,7 @@ class BotConfig(BaseModel):
     tts_model: str = "step-tts-2"
     # ASR (语音转文字)
     asr_model: str = "step-audio-2"
-    asr_prompt: str = "请完整转写这段语音，一字不漏地输出说话内容，并在前面描述语气。格式：\"用[语气描述]的语气说：[完整文字内容]\"。如果语音中有笑声、叹气、停顿等也描述出来。"
+    asr_prompt: str = "请完整转写这段语音，一字不漏地输出说话内容，并在前面描述音色和语气。格式：\"用[音色描述]的[语气描述]声音说：[完整文字内容]\"。音色描述如：软糯少女音、低沉男声、清脆童声等。如果语音中有笑声、叹气、停顿等也描述出来。"
     # Mood system
     mood_enabled: bool = True
     # Admin list
