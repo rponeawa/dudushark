@@ -430,6 +430,72 @@ class MessageHandler:
                 return [ReplyPart("TTS 失败...啊呜～")]
             return []
 
+        # 管理员发空间：硬过滤"空间"关键词 + LLM 判断意图
+        if is_sender_admin and "空间" in text:
+            try:
+                from server.bot.message_handler import _call_llm as _qzone_llm
+            except ImportError:
+                from server.bot.message_handler import _call_llm as _qzone_llm
+            _qzone_check_prompt = (
+                "判断用户是否在要求机器人发 QQ 空间说说。"
+                "只有明确要求发空间/发说说/发动态才返回 YES，否则返回 NO。\n"
+                f"用户消息：{text}\n"
+                "回答 YES 或 NO："
+            )
+            try:
+                _qzone_intent = await _call_llm(
+                    self.cfg.llm.base_url, self.cfg.llm.api_key,
+                    {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_check_prompt}],
+                     "max_tokens": 600, "temperature": 0.1},
+                )
+            except Exception:
+                _qzone_intent = "NO"
+            if "YES" in _qzone_intent.upper():
+                # 提取指定内容（如果有）
+                _qzone_content_prompt = (
+                    "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。\n"
+                    "用户让你发一条 QQ 空间说说。根据用户的要求生成内容。\n"
+                    "- 如果用户指定了内容，按用户说的写（用嘟嘟的语气润色）\n"
+                    "- 如果用户没指定内容（比如只说'发个空间'），你自己想一条\n"
+                    "- 50字以内，自然可爱，可以用'啊呜～'，自称'鱼'\n"
+                    "- 直接输出说说内容，不要加引号\n"
+                    f"用户消息：{text}\n"
+                    "说说内容："
+                )
+                try:
+                    _qzone_content = await _call_llm(
+                        self.cfg.llm.base_url, self.cfg.llm.api_key,
+                        {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_content_prompt}],
+                         "max_tokens": 600, "temperature": 0.9},
+                    )
+                    _qzone_content = _qzone_content.strip()
+                    if _qzone_content.startswith('"') and _qzone_content.endswith('"'):
+                        _qzone_content = _qzone_content[1:-1]
+                except Exception as e:
+                    return [ReplyPart(f"啊呜...内容生成失败了: {e}")]
+                if not _qzone_content:
+                    return [ReplyPart("啊呜...想不出说什么～")]
+                from server.qzone import QzoneClient
+                _qzone_cli = QzoneClient(self.bot_qq)
+                _ok, _msg = await _qzone_cli.publish_post(_qzone_content[:200])
+                if _ok:
+                    # 保存到本地
+                    from server.config import get_qzone_posts_path
+                    _qpath = get_qzone_posts_path(self.bot_qq)
+                    _qpath.parent.mkdir(parents=True, exist_ok=True)
+                    _qposts = []
+                    if _qpath.exists():
+                        try:
+                            _qposts = json.loads(_qpath.read_text(encoding="utf-8"))
+                        except Exception:
+                            pass
+                    _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
+                    _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
+                    return [ReplyPart(f"发好啦～啊呜～\n「{_qzone_content}」")]
+                else:
+                    return [ReplyPart(f"啊呜...发空间失败了: {_msg}")]
+            # 不匹配意图则继续正常对话流程
+
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
         _is_family = any(
             str(a.get("qq", "")) == user_id and "妈" in str(a.get("role", ""))
@@ -466,7 +532,8 @@ class MessageHandler:
         json_prompt += (
             "\n- diary: 鱼自己的经历或感悟。格式同memory。如：被人夸了、学到了新东西、经历了特别的事、别人对鱼说了重要的话"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
-            "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复"
+            "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
+            "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
         )
         # 注入当前时间，让 LLM 能计算 remind 时间戳
         now_utc = datetime.now(timezone.utc)
