@@ -477,13 +477,11 @@ class MessageHandler:
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
         )
-        # 注入当前时间，让 LLM 能计算 remind 时间戳
+        # 注入当前北京时间，让 LLM 感知时间
         now_utc = datetime.now(timezone.utc)
-        now_ts = int(now_utc.timestamp())
-        now_str = now_utc.strftime("%Y-%m-%d %H:%M UTC")
         tz8 = timezone(__import__("datetime").timedelta(hours=8))
         cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
-        json_prompt += f"\n（当前时间: {now_str} = 北京时间 {cn_str}，Unix时间戳: {now_ts}）"
+        json_prompt += f"\n（当前北京时间: {cn_str}）"
         # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
         if _qzone_keyword:
             json_prompt += (
