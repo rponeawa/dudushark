@@ -128,10 +128,16 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 
 **主动消息 + 提醒：**
-- ProactiveScheduler 读取 DuduMood，睡眠时段完全阻止
-- 不向从未主动发过消息的人主动发言
-- 提醒始终私聊发送，前端状态页可查看
+- 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话
+- `_relationship_warmth()` 评分选人：对话多、关系近的人优先
+- 对方当天没发过消息不主动找；睡眠时段不发言
+- 提醒始终私聊发送，不受 sleep/cooldown 限制
 - 有提醒时不创建记忆（避免重复存储）
+
+**管理员群聊控制：**
+- `/pause` — 群内管理员发送，暂停该群消息处理（不 LLM、不落盘）
+- `/resume` — 仅在暂停状态下由管理员发送，恢复消息处理
+- 暂停期间除 `/resume` 外所有消息静默忽略
 
 **管理员代传话（三层防护）：**
 - 主 LLM 输出 relay → 独立 LLM 验证（无上文，只看原始消息）→ 30s 去重
