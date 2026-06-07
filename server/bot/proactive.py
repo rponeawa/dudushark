@@ -1,7 +1,6 @@
 """
-Proactive messaging — DuduShark occasionally initiates conversations on her own,
-driven by her personality and the global mood/sleep system.
-Only in conversations where she has previously spoken.
+Proactive messaging — DuduShark occasionally initiates conversations driven by
+her mood/sleep state and relationship warmth with each person.
 """
 
 import asyncio
@@ -39,16 +38,14 @@ PROACTIVE_PROMPT = """你现在有一个属于自己的安静时刻。你是嘟�
 
 现在，你想说点什么吗？"""
 
-WAKE_ENGAGED_MIN = 180     # 3 min — Dudu最近在聊天
-WAKE_ENGAGED_MAX = 480     # 8 min
-WAKE_IDLE_MIN = 900        # 15 min — 有人说话但Dudu没参与
-WAKE_IDLE_MAX = 2700       # 45 min
-WAKE_QUIET_MIN = 1800      # 30 min — 完全安静
-WAKE_QUIET_MAX = 3600      # 60 min
+# 检查周期：根据心情状态调整间隔
+CYCLE_AWAKE   = (120, 300)    #  2–5 min — 清醒时频繁检查
+CYCLE_SLEEPY  = (300, 900)    #  5–15 min — 犯困了降低频率
+CYCLE_SLEEPING = (1200, 2400)  # 20–40 min — 睡着了基本不查
 
 
 class ProactiveScheduler:
-    """Per-instance scheduler that occasionally prompts Dudu to initiate."""
+    """Per-instance scheduler. Dudu decides whether and whom to talk to."""
 
     def __init__(self, bot_qq: str):
         self.bot_qq = bot_qq
@@ -70,7 +67,7 @@ class ProactiveScheduler:
             self._task.cancel()
             self._task = None
 
-    # ---- internal helpers ----
+    # ── helpers ──────────────────────────────────────────────
 
     def _now(self) -> float:
         return time.time()
@@ -79,19 +76,22 @@ class ProactiveScheduler:
     def _cfg(self):
         return get_message_handler(self.bot_qq).cfg
 
-    def _is_sleep_time(self) -> bool:
-        """UTC+8: 22:00-08:00 为睡眠时段，不主动发言。"""
+    @staticmethod
+    def _hour_utc8() -> int:
         from datetime import datetime, timezone, timedelta
-        tz = timezone(timedelta(hours=8))
-        hour = datetime.now(tz).hour
-        return hour >= 22 or hour < 8
+        return datetime.now(timezone(timedelta(hours=8))).hour
 
-    # 允许睡眠时段主动联系的 memory 标记
+    def _is_sleep_time(self) -> bool:
+        """22:00-08:00 = core quiet hours."""
+        h = self._hour_utc8()
+        return h >= 22 or h < 8
+
+    # ── sleep override (memory-based) ───────────────────────
+
     SLEEP_OVERRIDE_CATEGORY = "__proactive__"
     SLEEP_OVERRIDE_TITLE = "sleep_allow"
 
     def _has_sleep_override(self, user_id: str) -> bool:
-        """检查用户是否明确要求过嘟嘟在睡眠时间主动找TA。"""
         try:
             handler = get_message_handler(self.bot_qq)
             mems = handler.memory.recall_by_category(user_id, self.SLEEP_OVERRIDE_CATEGORY)
@@ -99,7 +99,10 @@ class ProactiveScheduler:
         except Exception:
             return False
 
+    # ── decision: should I speak? ───────────────────────────
+
     def _should_speak_now(self) -> bool:
+        """Single desire check: energy × curiosity, one random roll."""
         if not self._cfg.proactive_enabled:
             return False
 
@@ -109,42 +112,68 @@ class ProactiveScheduler:
 
         self.mood.update()
 
-        if not (random.random() < self._cfg.proactive_curiosity_threshold):
+        # Sleeping: don't initiate (reminders still fire in _cycle)
+        if self._is_sleep_time():
             return False
 
-        return random.random() < self.mood.chattiness()
+        # Desire = baseline curiosity × current energy (0–1)
+        # Energy already reflects sleepy/awake via mood system
+        desire = self._cfg.proactive_curiosity_threshold * self.mood.energy
+        return random.random() < desire
+
+    # ── decision: whom to talk to? ──────────────────────────
+
+    def _relationship_warmth(self, conv_key: str, handler) -> float:
+        """0.0–1.0 score reflecting how close Dudu feels to this person.
+
+        Based on total exchange count and recency.  More messages →
+        warmer.  Long silence → cools down.
+        """
+        msgs = handler._conversations.get(conv_key, [])
+        if not msgs:
+            return 0.1
+
+        exchanges = sum(1 for m in msgs if m.get("role") in ("user", "assistant"))
+        last_ts = max((m.get("ts", 0) for m in msgs), default=0)
+        age_hours = (self._now() - last_ts) / 3600
+
+        # Frequent conversation = close bond
+        bond = min(1.0, exchanges / 60)
+        # Recency decay: still warm within 24h, fades over a week
+        recency = max(0.1, 1.0 - age_hours / 168)
+        return bond * recency
 
     def _pick_conversation(self) -> tuple[str, str, str] | None:
-        """Return (user_id, group_id, conv_key) of chosen conversation, or None."""
+        """Return (user_id, group_id, conv_key) or None."""
         handler = get_message_handler(self.bot_qq)
         eligible = handler.get_eligible_conversations()
         if not eligible:
             return None
 
-        in_sleep = self._is_sleep_time()
         now = self._now()
         candidates = []
         weights = []
 
         for conv_key, user_id, group_id, last_ts in eligible:
             # Per-conversation cooldown
-            last_pro = self._last_conv_proactive.get(conv_key, 0)
-            if now - last_pro < self._cfg.proactive_per_conv_cooldown_sec:
+            if now - self._last_conv_proactive.get(conv_key, 0) < self._cfg.proactive_per_conv_cooldown_sec:
                 continue
 
-            # 睡眠时段只联系明确允许打扰的用户
-            if in_sleep and not self._has_sleep_override(user_id):
+            # Sleep + no override → skip
+            if self._is_sleep_time() and not self._has_sleep_override(user_id):
                 continue
 
+            # Base weight: private vs group
             w = self._cfg.proactive_private_probability if not group_id else self._cfg.proactive_group_probability
 
-            # Recency bonus: conversations with recent activity get a boost
+            # Relationship warmth bonus: closer people get priority
+            w *= 0.5 + self._relationship_warmth(conv_key, handler)
+
+            # Recency: very recent (≤30 min) gets a soft boost, very stale (>7 d) gets a penalty
             idle_minutes = (now - last_ts) / 60
             if idle_minutes < 30:
-                w *= 2.0
-            elif idle_minutes < 120:
-                w *= 1.3
-            elif idle_minutes > 1440:  # >24h idle
+                w *= 1.5
+            elif idle_minutes > 10080:  # >7 days
                 w *= 0.3
 
             if w <= 0:
@@ -155,20 +184,20 @@ class ProactiveScheduler:
         if not candidates:
             return None
 
-        # Weighted random choice
+        # Weighted random pick
         total = sum(weights)
         r = random.random() * total
         cumulative = 0.0
         for i, w in enumerate(weights):
             cumulative += w
             if r <= cumulative:
-                conv_key, user_id, group_id = candidates[i]
-                return user_id, group_id, conv_key
+                return candidates[i][1], candidates[i][2], candidates[i][0]
 
         return None
 
+    # ── reminders ──────────────────────────────────────────
+
     async def _check_reminders(self):
-        """检查并触发到期的定时提醒。发送后自动删除。"""
         try:
             from server.config import get_reminders_path
             path = get_reminders_path(self.bot_qq)
@@ -177,7 +206,6 @@ class ProactiveScheduler:
             reminders = json.loads(path.read_text(encoding="utf-8"))
             if not reminders:
                 return
-
             now = self._now()
             remaining = []
             for r in reminders:
@@ -190,23 +218,22 @@ class ProactiveScheduler:
             pass
 
     async def _fire_reminder(self, r: dict):
-        """发送一条提醒消息。"""
         client = onebot_server.get_client(self.bot_qq)
         if not client or not client.connected:
             return
         content = r.get("content", "")
         user_id = r.get("user_id", "")
-        group_id = r.get("group_id", "")
-        # 提醒始终私聊发送，不在群里刷屏
         try:
             if user_id:
                 await client.send_private_msg(user_id, content)
-            logger.info(f"[{self.bot_qq}] Reminder fired: to={user_id or group_id}")
+            logger.info(f"[{self.bot_qq}] Reminder fired: to={user_id}")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Reminder send failed: {e}")
 
+    # ── main cycle ─────────────────────────────────────────
+
     async def _cycle(self):
-        # 先检查定时提醒（不受 sleep/cooldown 限制）
+        # Reminders always fire (unconditional)
         await self._check_reminders()
 
         if not self._should_speak_now():
@@ -243,49 +270,22 @@ class ProactiveScheduler:
             now = self._now()
             self._last_global_ts = now
             self._last_conv_proactive[conv_key] = now
-            logger.info(f"[{self.bot_qq}] Proactive message sent to {conv_key}")
+            logger.info(f"[{self.bot_qq}] Proactive sent → {conv_key}")
         except Exception as e:
-            logger.error(f"[{self.bot_qq}] Failed to send proactive message: {e}")
+            logger.error(f"[{self.bot_qq}] Proactive send failed: {e}")
 
-    def _conversation_engagement(self) -> str:
-        """Check if Dudu is in active conversation. Returns 'engaged'|'idle'|'quiet'."""
-        handler = get_message_handler(self.bot_qq)
-        now = self._now()
-        dudu_recent = False
-        anyone_recent = False
-        for conv_key in handler.list_conversations():
-            msgs = handler._conversations.get(conv_key, [])
-            for m in reversed(msgs):
-                age = now - m.get("ts", 0)
-                if age > 600:  # only look at last 10 min
-                    break
-                if m.get("role") == "assistant":
-                    dudu_recent = True
-                anyone_recent = True
-                break  # found recent message
-            if dudu_recent:
-                break
-        if dudu_recent:
-            return "engaged"
-        if anyone_recent:
-            return "idle"
-        return "quiet"
+    # ── timing ─────────────────────────────────────────────
 
-    def _next_wake(self) -> float:
-        level = self._conversation_engagement()
-        if level == "engaged":
-            base = random.uniform(WAKE_ENGAGED_MIN, WAKE_ENGAGED_MAX)
-        elif level == "idle":
-            base = random.uniform(WAKE_IDLE_MIN, WAKE_IDLE_MAX)
-        else:
-            base = random.uniform(WAKE_QUIET_MIN, WAKE_QUIET_MAX)
-
+    def _next_delay(self) -> float:
+        """Seconds until next cycle. Shorter when awake, longer when sleepy."""
         state = self.mood.sleep_state
-        if state == "sleepy":
-            base *= 2.5
-        elif state in ("just_woke", "night_owl"):
-            base *= 0.5
-        return base
+        if state == "sleeping":
+            lo, hi = CYCLE_SLEEPING
+        elif state == "sleepy":
+            lo, hi = CYCLE_SLEEPY
+        else:
+            lo, hi = CYCLE_AWAKE
+        return random.uniform(lo, hi)
 
     async def _loop(self):
         while not self._stopped:
@@ -296,7 +296,7 @@ class ProactiveScheduler:
             except Exception:
                 logger.exception(f"[{self.bot_qq}] Proactive cycle error")
             try:
-                await asyncio.sleep(self._next_wake())
+                await asyncio.sleep(self._next_delay())
             except asyncio.CancelledError:
                 return
 
