@@ -108,7 +108,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 **语音系统：**
 - ASR（语音转文字）：收到 `record` 段 → `get_record` API 转 wav → `docker exec cat` 读文件 → step-audio-2 转写
 - TTS（文字转语音）：LLM 通过 `voice` JSON 字段决定是否发语音，`voice_emotion` 选情绪
-- LLM 撒娇卖萌/对方要求语音时触发。`voice: "all"` 全发，`"last"` 仅最后一段发
+- 大部分时候 null。撒娇卖萌/对方要求/特别开心时发 `last`（最后一段语音，比较常用），`all`（整段语音，很少用）
 - `/say [情绪] 文本` 管理员命令测试语音（私聊/群聊均可，不落 JSONL）
 - 情绪：撒娇/高兴/非常高兴/悲伤/生气/非常生气/兴奋/惊讶/困惑/恐惧
 - TTS 模型/音色、ASR 模型/提示词均在 WebUI 可配
