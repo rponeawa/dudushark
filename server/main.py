@@ -97,6 +97,7 @@ async def onebot_ws(ws: WebSocket, qq: str):
             msg_type=kwargs["msg_type"],
             message_id=kwargs.get("message_id", ""),
             images=kwargs.get("images", []),
+            image_infos=kwargs.get("image_infos", []),
         )
         if not replies:
             return
@@ -113,16 +114,49 @@ async def onebot_ws(ws: WebSocket, qq: str):
             try:
                 text = re.sub(r"^>>\s*", "", part.text)  # regex strip >>
                 quote_id = part.quote_msg_id
-                if quote_id:
-                    if is_group:
-                        await client.send_group_msg_quote(target, text, quote_id)
+
+                if part.voice:
+                    # 语音回复：TTS → 共享卷 → NapCat 发送
+                    import base64, os, uuid
+                    audio_bytes = await handler._tts_speak(text, part.voice_emotion)
+                    if audio_bytes:
+                        tts_dir = "/home/hsinli/napcat/config/tts"
+                        os.makedirs(tts_dir, exist_ok=True)
+                        fname = f"{uuid.uuid4().hex[:8]}.wav"
+                        host_path = os.path.join(tts_dir, fname)
+                        docker_path = f"/app/napcat/config/tts/{fname}"
+                        with open(host_path, "wb") as f:
+                            f.write(audio_bytes)
+                        logger.info(f"[发送] {i+1}/{len(replies)} 语音 ({len(audio_bytes)} bytes)")
+                        if quote_id:
+                            # 先发引用文字，再发语音
+                            if is_group:
+                                await client.send_group_msg_quote(target, text, quote_id)
+                            else:
+                                await client.send_private_msg_quote(kwargs["user_id"], text, quote_id)
+                            await asyncio.sleep(0.5)
+                        if is_group:
+                            await client.send_group_voice(target, docker_path)
+                        else:
+                            await client.send_private_voice(kwargs["user_id"], docker_path)
                     else:
-                        await client.send_private_msg_quote(kwargs["user_id"], text, quote_id)
+                        # TTS 失败，降级为文字
+                        logger.warning(f"[发送] TTS 失败，降级为文字")
+                        if is_group:
+                            await client.send_group_msg(target, text)
+                        else:
+                            await client.send_private_msg(kwargs["user_id"], text)
                 else:
-                    if is_group:
-                        await client.send_group_msg(target, text)
+                    if quote_id:
+                        if is_group:
+                            await client.send_group_msg_quote(target, text, quote_id)
+                        else:
+                            await client.send_private_msg_quote(kwargs["user_id"], text, quote_id)
                     else:
-                        await client.send_private_msg(kwargs["user_id"], text)
+                        if is_group:
+                            await client.send_group_msg(target, text)
+                        else:
+                            await client.send_private_msg(kwargs["user_id"], text)
                 if i < len(replies) - 1:
                     # 模拟打字时间：每字 ~0.08s + 基础 1s，最少 2s
                     typing_delay = max(2.0, len(text) * 0.08 + 1.0)

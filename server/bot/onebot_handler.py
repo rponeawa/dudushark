@@ -76,7 +76,7 @@ class OneBotClient:
         group_id = str(data.get("group_id", ""))
         message_id = str(data.get("message_id", ""))
 
-        text, images = self._extract_text(data.get("message", raw_message))
+        text, images, image_infos = self._extract_text(data.get("message", raw_message))
         msg_obj = data.get("message")
         if isinstance(msg_obj, list) and any(isinstance(s, dict) and s.get("type") == "reply" for s in msg_obj):
             logger.info(f"[{self.bot_qq}] reply segment found: {msg_obj}")
@@ -95,15 +95,17 @@ class OneBotClient:
                 message_id=message_id,
                 raw=data,
                 images=images,
+                image_infos=image_infos,
             ))
 
-    def _extract_text(self, message) -> tuple[str, list[str]]:
-        """返回 (文本, 图片URL列表)。"""
+    def _extract_text(self, message) -> tuple[str, list[str], list[dict]]:
+        """返回 (文本, 图片URL列表, 图片信息列表)。"""
         if isinstance(message, str):
-            return message, []
+            return message, [], []
         if isinstance(message, list):
             parts = []
             images = []
+            image_infos = []  # [{"url":..., "is_sticker":bool, "summary":str}]
             mentioned = False
             has_reply = False
             for seg in message:
@@ -116,10 +118,28 @@ class OneBotClient:
                     elif t == "text":
                         parts.append(seg.get("data", {}).get("text", ""))
                     elif t == "image":
-                        url = seg.get("data", {}).get("url", "")
+                        img_data = seg.get("data", {})
+                        url = img_data.get("url", "")
+                        sub = img_data.get("sub_type", img_data.get("subType", -1))
+                        is_sticker = sub in (1, "1")
+                        summary = img_data.get("summary", "").strip()
                         if url:
                             images.append(url)
-                        parts.append("[图片]")
+                            image_infos.append({"url": url, "is_sticker": is_sticker, "summary": summary})
+                        if is_sticker:
+                            label = f"[表情包：{summary}]" if summary else "[表情包]"
+                        else:
+                            label = "[图片]"
+                        parts.append(label)
+                    elif t == "record":
+                        rec_data = seg.get("data", {})
+                        rec_file = rec_data.get("file", rec_data.get("file_id", ""))
+                        rec_url = rec_data.get("url", "")
+                        logger.info(f"[{self.bot_qq}] voice record: file={rec_file[:50]}, url={rec_url[:80] if rec_url else 'N/A'}")
+                        image_infos.append({"is_voice": True, "file": rec_file, "url": rec_url})
+                        parts.append("[语音]")
+                    else:
+                        logger.info(f"[{self.bot_qq}] unknown seg type: {t}, keys={list(seg.get('data', {}).keys())}")
                 elif isinstance(seg, str):
                     parts.append(seg)
             text = "".join(parts)
@@ -131,7 +151,7 @@ class OneBotClient:
                 text = "@鱼 " + text
             elif has_reply:
                 text = "[回复鱼] " + text
-            return text, images
+            return text, images, image_infos
         return str(message), []
 
     async def _handle_notice(self, data: dict):
@@ -192,6 +212,20 @@ class OneBotClient:
             self._api_callbacks.pop(echo, None)
             raise
 
+    async def send_private_voice(self, user_id: str, file_path: str) -> dict:
+        """发送私聊语音。file_path 为 NapCat 容器内可访问的音频文件路径。"""
+        return await self.call_api("send_private_msg", {
+            "user_id": int(user_id),
+            "message": [{"type": "record", "data": {"file": file_path}}],
+        })
+
+    async def send_group_voice(self, group_id: str, file_path: str) -> dict:
+        """发送群聊语音。"""
+        return await self.call_api("send_group_msg", {
+            "group_id": int(group_id),
+            "message": [{"type": "record", "data": {"file": file_path}}],
+        })
+
     async def send_private_msg(self, user_id: str, message: str) -> dict:
         return await self.call_api("send_private_msg", {
             "user_id": int(user_id),
@@ -223,6 +257,24 @@ class OneBotClient:
                 {"type": "text", "data": {"text": message}},
             ],
         })
+
+    async def get_record(self, file_id: str = "", file: str = "", out_format: str = "wav") -> dict:
+        """获取语音文件。file_id 或 file 二选一。"""
+        params = {"out_format": out_format}
+        if file_id:
+            params["file_id"] = file_id
+        elif file:
+            params["file"] = file
+        return await self.call_api("get_record", params)
+
+    async def get_file(self, file_id: str = "", file: str = "") -> dict:
+        """获取文件（含 base64）。file_id 或 file 二选一。"""
+        params = {}
+        if file_id:
+            params["file_id"] = file_id
+        elif file:
+            params["file"] = file
+        return await self.call_api("get_file", params)
 
     async def get_login_info(self) -> dict:
         return await self.call_api("get_login_info")

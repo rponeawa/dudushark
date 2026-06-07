@@ -50,6 +50,18 @@ export interface BotConfig {
   group_merge_delay: number;
   napcat_webui_port: number;
   onebot_ws_port: number;
+  proactive_enabled?: boolean;
+  proactive_global_cooldown_sec?: number;
+  proactive_per_conv_cooldown_sec?: number;
+  proactive_group_probability?: number;
+  proactive_private_probability?: number;
+  proactive_curiosity_threshold?: number;
+  mood_enabled?: boolean;
+  tts_enabled?: boolean;
+  tts_voice?: string;
+  tts_model?: string;
+  asr_model?: string;
+  asr_prompt?: string;
   admins: Array<{ qq: string; role: string }>;
   admins_description: string;
   family_memory: string;

@@ -110,13 +110,16 @@ GROUP_MAX_WINDOW = 60.0     # 群聊最大累计等待
 
 
 class ReplyPart:
-    """一条回复，含可选的引用消息 ID。"""
-    def __init__(self, text: str, quote_msg_id: str | None = None):
+    """一条回复，含可选的引用消息 ID、语音标记和情绪。"""
+    def __init__(self, text: str, quote_msg_id: str | None = None, voice: bool = False, voice_emotion: str = ""):
         self.text = text
         self.quote_msg_id = quote_msg_id
+        self.voice = voice
+        self.voice_emotion = voice_emotion
 
     def __repr__(self):
-        return f"ReplyPart(text={self.text[:40]!r}, quote={self.quote_msg_id})"
+        v = f" voice({self.voice_emotion})" if self.voice else ""
+        return f"ReplyPart(text={self.text[:40]!r}, quote={self.quote_msg_id}{v})"
 
 
 class MessageHandler:
@@ -213,6 +216,7 @@ class MessageHandler:
         self, user_id: str, user_name: str, text: str,
         group_id: str = "", msg_type: str = "private", message_id: str = "",
         images: list[str] | None = None,
+        image_infos: list[dict] | None = None,
     ) -> list[ReplyPart]:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
@@ -231,6 +235,8 @@ class MessageHandler:
             existing["msg_ids"].append(message_id)
             if images:
                 existing.setdefault("all_images", []).extend(images)
+            if image_infos:
+                existing.setdefault("all_image_infos", []).extend(image_infos)
             fut: asyncio.Future = asyncio.get_event_loop().create_future()
             existing["futures"].append(fut)
             if existing.get("task") and not existing["task"].done():
@@ -249,6 +255,7 @@ class MessageHandler:
                 "first_ts": now,
                 "futures": [fut],
                 "all_images": list(images) if images else [],
+                "all_image_infos": list(image_infos) if image_infos else [],
                 "task": asyncio.create_task(
                     self._flush_and_resolve(buf_key, group_id, user_id, user_name, is_group, merge_delay)
                 ),
@@ -272,6 +279,7 @@ class MessageHandler:
         user_ids_batch = buf.get("user_ids", [user_id] * len(texts))
         msg_ids = buf.get("msg_ids", [])
         all_images = buf.get("all_images", [])
+        all_image_infos = buf.get("all_image_infos", [])
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
         # 合并消息用序号标注，让 LLM 知道每条消息的索引
@@ -284,7 +292,7 @@ class MessageHandler:
         async with self._lock:
             replies = await self._handle_impl(
                 user_id, user_name, combined, group_id, "group" if is_group else "private",
-                last_msg_id, names_map, all_images, msg_ids
+                last_msg_id, names_map, all_images, msg_ids, all_image_infos
             )
 
         # 保存合并全文，供前端事件使用
@@ -303,6 +311,7 @@ class MessageHandler:
         names_map: dict[str, str] | None = None,
         images: list[str] | None = None,
         msg_ids: list[str] | None = None,
+        image_infos: list[dict] | None = None,
     ) -> list[ReplyPart]:
         is_group = bool(group_id)
 
@@ -355,6 +364,43 @@ class MessageHandler:
 
         # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
         is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
+
+        # /say 命令：管理员测试语音  (/say [情绪] 文本)
+        import re as _re2
+        say_m = _re2.search(r'/say\s+(.+)', text)
+        if is_sender_admin and say_m:
+            raw_say = say_m.group(1).strip()
+            # 支持情绪前缀: /say 撒娇 啊呜～
+            EMOTIONS = {"撒娇", "高兴", "非常高兴", "悲伤", "生气", "非常生气", "兴奋", "惊讶", "恐惧", "困惑"}
+            say_emotion = ""
+            say_text = raw_say
+            for em in sorted(EMOTIONS, key=len, reverse=True):
+                if raw_say.startswith(em + " ") or raw_say == em:
+                    say_emotion = em
+                    say_text = raw_say[len(em):].strip()
+                    break
+            if say_text:
+                audio = await self._tts_speak(say_text, say_emotion)
+                if audio:
+                    import os, uuid
+                    tts_dir = "/home/hsinli/napcat/config/tts"
+                    os.makedirs(tts_dir, exist_ok=True)
+                    fname = f"{uuid.uuid4().hex[:8]}.wav"
+                    with open(os.path.join(tts_dir, fname), "wb") as f:
+                        f.write(audio)
+                    docker_path = f"/app/napcat/config/tts/{fname}"
+                    from server.bot.onebot_handler import onebot_server as _obs
+                    _client = _obs.get_client(self.bot_qq)
+                    if _client and _client.connected:
+                        if is_group:
+                            await _client.send_group_voice(group_id, docker_path)
+                        else:
+                            await _client.send_private_voice(user_id, docker_path)
+                        logger.info(f"[{self.bot_qq}] /say voice sent: {say_text[:50]}")
+                    return []
+                return [ReplyPart("TTS 失败...啊呜～")]
+            return []
+
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
         _is_family = any(
             str(a.get("qq", "")) == user_id and "妈" in str(a.get("role", ""))
@@ -378,10 +424,12 @@ class MessageHandler:
             "【记忆规则 - 同样重要】对方说了有点意思的事就可以记。关键信息、性格、喜好、经历、约定都值得记。日常寒暄——打招呼、道晚安、随口闲聊——不是记忆。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。不用markdown代码块包裹。\n"
-            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
+            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
+            "- voice: 发送语音。null=不发语音。撒娇卖萌/表达亲密时偶尔发，对方明确要求语音回复（如\"用语音说\"/\"说句话听听\"）时也发。用法: \"all\"=全发语音, \"last\"=只有最后一段发语音。绝大多数时候为null。\n"
+            "- voice_emotion: 语音情绪。null或\"撒娇\"/\"高兴\"/\"非常高兴\"/\"生气\"/\"非常生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。只在voice不为null时有效。\n"
             "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。相同类别+标题会更新"
         )
         if is_group:
@@ -458,6 +506,60 @@ class MessageHandler:
                 break
         display_name = f"{clean_name}{role_tag}"
 
+        # 语音转录：下载音频 → step-audio-2 转文字
+        voice_transcripts = []
+        if image_infos:
+            from server.bot.onebot_handler import onebot_server as _obs
+            _client = _obs.get_client(self.bot_qq)
+            if _client and _client.connected:
+                for vi, info in enumerate(image_infos):
+                    if info.get("is_voice"):
+                        vf = info.get("file", "")
+                        if vf:
+                            try:
+                                import base64 as _b64, subprocess as _sp
+                                # 用 get_record 转码为 wav（文件在 Docker 容器内），再 docker exec 读出来
+                                rec = await _client.get_record(file=vf, out_format="wav")
+                                d = rec.get("data", {})
+                                file_path = ""
+                                if isinstance(d, dict):
+                                    file_path = d.get("file", "")
+                                elif isinstance(d, str):
+                                    file_path = d
+                                if not file_path:
+                                    file_path = rec.get("file", "")
+                                b64 = ""
+                                if file_path and ("/" in file_path or "\\" in file_path):
+                                    logger.info(f"[{self.bot_qq}] Voice wav path: {file_path[:100]}")
+                                    # docker exec napcat cat 读取容器内文件
+                                    try:
+                                        raw = _sp.run(["/usr/bin/docker", "exec", "napcat", "cat", file_path],
+                                                       capture_output=True, timeout=15)
+                                        logger.info(f"[{self.bot_qq}] docker exec: rc={raw.returncode}, stdout={len(raw.stdout)}b, stderr={raw.stderr.decode()[:100] if raw.stderr else 'none'}")
+                                        if raw.returncode == 0 and raw.stdout:
+                                            b64 = _b64.b64encode(raw.stdout).decode()
+                                            logger.info(f"[{self.bot_qq}] Read voice via docker exec: {len(raw.stdout)} bytes")
+                                    except Exception as e2:
+                                        logger.error(f"[{self.bot_qq}] docker exec failed: {e2}")
+                                if b64:
+                                    out = await self._transcribe_voice(b64)
+                                    if out:
+                                        # 清理转写结果中的无关前缀
+                                        out = out.strip()
+                                        for prefix in ["中文<中文>", "中文", "<中文>"]:
+                                            if out.startswith(prefix):
+                                                out = out[len(prefix):].strip()
+                                        voice_transcripts.append(out)
+                                        logger.info(f"[{self.bot_qq}] Voice transcribed: {out[:80]}")
+                                else:
+                                    logger.warning(f"[{self.bot_qq}] get_record returned no data: {json.dumps(rec, ensure_ascii=False)[:200]}")
+                            except Exception as e:
+                                logger.error(f"[{self.bot_qq}] Voice transcription failed: {e}")
+            if voice_transcripts:
+                # 替换 [语音] 为转录文字
+                for vt in voice_transcripts:
+                    text = text.replace("[语音]", f"[语音转文字：{vt}]", 1)
+
         # 多模态：有图片时使用 content 数组格式
         if images:
             content_parts = [{"type": "text", "text": f"{prefix}{display_name} 说: {text}"}]
@@ -470,6 +572,8 @@ class MessageHandler:
 
 
         messages.append(user_msg)
+        if voice_transcripts:
+            messages.append({"role": "system", "content": "（语音已自动转写为文字，直接回复内容即可，不需要说你听不到语音。）"})
         messages.append({"role": "system", "content": "（日常闲聊不记memory。）"})
 
         # 提前定义这些函数，供主流程和后台搜索任务共用
@@ -768,10 +872,20 @@ class MessageHandler:
             except Exception:
                 pass
 
+        # 语音决策
+        voice_mode = data.get("voice") if data else None
+        voice_emotion = data.get("voice_emotion", "") if data else ""
         result = []
-        for i, part in enumerate(self._split_reply(reply_text)):
+        parts = self._split_reply(reply_text)
+        for i, part in enumerate(parts):
             qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
-            result.append(ReplyPart(part, qid))
+            is_last = (i == len(parts) - 1)
+            is_voice = False
+            if voice_mode == "all":
+                is_voice = True
+            elif voice_mode == "last" and is_last:
+                is_voice = True
+            result.append(ReplyPart(part, qid, voice=is_voice, voice_emotion=voice_emotion))
             self._append_history(user_id, "assistant", part, group_id)
         return result
 
@@ -873,6 +987,58 @@ class MessageHandler:
             logger.info(f"[{self.bot_qq}] Reminder saved: at_utc={at_utc} for {user_id}")
         except Exception as e:
             logger.error(f"[{self.bot_qq}] Failed to save reminder: {e}")
+
+    async def _tts_speak(self, text: str, emotion: str = "") -> bytes | None:
+        """用 StepFun TTS 将文字合成为语音。"""
+        if not self.cfg.tts_enabled:
+            return None
+        try:
+            llm = self.cfg.llm
+            payload: dict = {
+                "model": self.cfg.tts_model,
+                "input": text,
+                "voice": self.cfg.tts_voice,
+                "response_format": "wav",
+            }
+            if emotion:
+                payload["voice_label"] = {"emotion": emotion}
+            async with httpx.AsyncClient(timeout=30) as hc:
+                resp = await hc.post(
+                    "https://api.stepfun.com/v1/audio/speech",
+                    headers={"Authorization": f"Bearer {llm.api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if resp.status_code == 200:
+                return resp.content
+            else:
+                logger.error(f"[{self.bot_qq}] TTS failed: HTTP {resp.status_code}: {resp.text[:200]}")
+                return None
+        except Exception as e:
+            logger.error(f"[{self.bot_qq}] TTS error: {e}")
+            return None
+
+    async def _transcribe_voice(self, audio_data: str) -> str:
+        """用 step-audio-2 将语音转录为文字。audio_data 为 base64 或 data: URI。"""
+        try:
+            llm = self.cfg.llm
+            if not audio_data.startswith("data:"):
+                audio_data = f"data:audio/wav;base64,{audio_data}"
+            payload = {
+                "model": self.cfg.asr_model,
+                "modalities": ["text"],
+                "messages": [
+                    {"role": "system", "content": self.cfg.asr_prompt},
+                    {"role": "user", "content": [
+                        {"type": "input_audio", "input_audio": {"data": audio_data}},
+                    ]},
+                ],
+                "temperature": 0.1,
+                "max_tokens": 500,
+            }
+            raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=30)
+            return raw.strip()
+        except Exception:
+            return ""
 
     async def _should_record_memory(self, mem: dict, text: str) -> bool:
         """独立 LLM 判断是否真的值得记录这条记忆。"""

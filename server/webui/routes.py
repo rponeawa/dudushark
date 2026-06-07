@@ -307,6 +307,11 @@ class ConfigUpdate(BaseModel):
     proactive_private_probability: float | None = None
     proactive_curiosity_threshold: float | None = None
     mood_enabled: bool | None = None
+    tts_enabled: bool | None = None
+    tts_voice: str | None = None
+    tts_model: str | None = None
+    asr_model: str | None = None
+    asr_prompt: str | None = None
     admins: list[dict] | None = None
     admins_description: str | None = None
     family_memory: str | None = None
@@ -352,6 +357,16 @@ async def update_config(qq: str, body: ConfigUpdate):
         cfg.proactive_curiosity_threshold = body.proactive_curiosity_threshold
     if body.mood_enabled is not None:
         cfg.mood_enabled = body.mood_enabled
+    if body.tts_enabled is not None:
+        cfg.tts_enabled = body.tts_enabled
+    if body.tts_voice is not None:
+        cfg.tts_voice = body.tts_voice
+    if body.tts_model is not None:
+        cfg.tts_model = body.tts_model
+    if body.asr_model is not None:
+        cfg.asr_model = body.asr_model
+    if body.asr_prompt is not None:
+        cfg.asr_prompt = body.asr_prompt
     if body.admins is not None:
         cfg.admins = body.admins
     if body.admins_description is not None:

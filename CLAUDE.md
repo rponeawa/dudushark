@@ -42,6 +42,11 @@ PYTHONPATH=. .venv/bin/python tests/test_reminders.py
 | `STEPFUN_API_KEY` | 阶跃星辰 LLM API Key |
 | `SILICONFLOW_API_KEY` | SiliconFlow 嵌入 API Key (BAAI/bge-m3) |
 | `WEBUI_PASSWORD` | WebUI 面板登录密码（不设置则跳过鉴权） |
+| `tts_enabled` | 语音发送开关 |
+| `tts_voice` | TTS 音色，默认 `ruanmengnvsheng`（软萌女声） |
+| `tts_model` | TTS 模型，默认 `step-tts-2` |
+| `asr_model` | 语音转文字模型，默认 `step-audio-2` |
+| `asr_prompt` | 转写提示词 |
 | `DUDUSHARK_DATA` | 数据目录，默认 `./data` |
 
 ## 架构
@@ -67,12 +72,12 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 
 **消息处理链路：**
 1. NapCatQQ 通过反向 WS 发送 OneBot 事件 → `onebot_handler._dispatch()`
-2. 图片消息提取 URL，纯图片不丢弃
+2. 图片/表情包/语音消息提取。图片和表情包通过 `sub_type` 区分，语音触发 ASR 转写
 3. 消息类型事件用 `create_task` 调度到后台，不阻塞 WS 接收循环
 4. `message_handler.handle()` 使用 Future 机制合并同用户连续消息
 5. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
-6. LLM 返回 JSON：`{"reply":"...","quote":bool,"memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...}}`
-7. 若 JSON 含 `say`+`search`：先发 `say`，后台搜索 → 二次 LLM → 发最终回复
+6. LLM 返回 JSON：`{"reply":"...","quote":bool,"voice":null|"all"|"last","voice_emotion":null|"...","memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...}}`
+7. `voice` 非 null 时：发送语音（StepFun TTS step-tts-2），`voice_emotion` 控制情绪
 8. 长回复按 `。！？\n～` 断句拆分发送，不限段数，间隔 `max(2.0, len*0.08+1.0)`
 9. `[SKIP]` 不回复，LLM 调用失败返回 `[]` 不回复
 10. LLM 调用指数退避重试（3次, 2/4/8s），速率限制（滑动窗口 8次/60s）
@@ -97,6 +102,14 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 相同 category+title → upsert 更新，不同 → 新建
 - `__diary__` 全局记忆，`__group__<id>` 群聊记忆
 - ChromaDB collection 名使用 `strip("_")` 清理非法字符
+
+**语音系统：**
+- ASR（语音转文字）：收到 `record` 段 → `get_record` API 转 wav → `docker exec cat` 读文件 → step-audio-2 转写
+- TTS（文字转语音）：LLM 通过 `voice` JSON 字段决定是否发语音，`voice_emotion` 选情绪
+- LLM 撒娇卖萌/对方要求语音时触发。`voice: "all"` 全发，`"last"` 仅最后一段发
+- `/say [情绪] 文本` 管理员命令测试语音（私聊/群聊均可，不落 JSONL）
+- 情绪：撒娇/高兴/非常高兴/悲伤/生气/非常生气/兴奋/惊讶/困惑/恐惧
+- TTS 模型/音色、ASR 模型/提示词均在 WebUI 可配
 
 **对话持久化：**
 - JSONL 文件落盘 `data/instances/{qq}/conversations/{key}.jsonl`

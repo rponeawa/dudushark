@@ -154,6 +154,46 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                 />
                 网络搜索
               </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={cfg.tts_enabled !== false}
+                  onChange={(e) => setCfg({ ...cfg, tts_enabled: e.target.checked })}
+                  style={{ width: "auto" }}
+                />
+                语音发送 (TTS)
+              </label>
+            </div>
+          </div>
+
+          <div className="section">
+            <div className="section-title">语音合成 (TTS)</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>TTS 模型</label>
+                <input value={cfg.tts_model || "step-tts-2"} onChange={(e) => setCfg({ ...cfg, tts_model: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>音色 Voice ID</label>
+                <input value={cfg.tts_voice || "ruanmengnvsheng"} onChange={(e) => setCfg({ ...cfg, tts_voice: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="section">
+            <div className="section-title">语音转文字 (ASR)</div>
+            <div className="form-group">
+              <label>ASR 模型</label>
+              <input value={cfg.asr_model || "step-audio-2"} onChange={(e) => setCfg({ ...cfg, asr_model: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label>转写提示词</label>
+              <textarea
+                value={cfg.asr_prompt || ""}
+                onChange={(e) => setCfg({ ...cfg, asr_prompt: e.target.value })}
+                rows={3}
+                placeholder="语音转文字的提示词"
+              />
             </div>
           </div>
 
