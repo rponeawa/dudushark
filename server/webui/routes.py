@@ -249,6 +249,7 @@ async def pause_group(qq: str, group_id: str):
     """暂停群消息处理。"""
     handler = get_message_handler(qq)
     handler._paused_groups.add(group_id)
+    handler._save_paused_groups()
     logger.info(f"[{qq}] WebUI paused group {group_id}")
     return {"ok": True}
 
@@ -258,6 +259,7 @@ async def resume_group(qq: str, group_id: str):
     """恢复群消息处理。"""
     handler = get_message_handler(qq)
     handler._paused_groups.discard(group_id)
+    handler._save_paused_groups()
     logger.info(f"[{qq}] WebUI resumed group {group_id}")
     return {"ok": True}
 

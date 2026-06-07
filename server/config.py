@@ -66,6 +66,8 @@ class BotConfig(BaseModel):
     admins: list[dict] = []
     # 管理员角色描述（注入 system prompt，不提交到 GitHub）
     admins_description: str = ""
+    # 被暂停的群聊列表
+    paused_groups: list[str] = []
     # 家族记忆 + 附带指令（仅家人私聊注入，不提交到 GitHub）
     family_memory: str = ""
     family_note: str = ""
