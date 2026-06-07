@@ -94,7 +94,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 **群聊 SKIP 系统（三层）：**
 1. 主 LLM 自行判断是否回复（包括 @鱼/戳一戳——生气可 SKIP）
 2. 主 LLM 决定回复后 → 独立 LLM 二次验证（只看最近 10 分钟上下文+人设）
-3. 睡眠时段（22-7）附加"正在睡觉"提示，SKIP 概率大幅提高
+3. 睡眠时段（23-8）附加"正在睡觉"提示，SKIP 概率大幅提高
 
 **记忆系统：**
 - 每人独立 ChromaDB collection（`mem_{safe_user_id}`），向量检索完全隔离
@@ -118,7 +118,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 每次 API 调用都重新获取 Cookie 避免过期
 - 发帖：POST `emotion_cgi_publish_v6`，读取：GET `emotion_cgi_msglist_v6`
 - **管理员触发发帖**：管理员消息含"空间/说说/动态"关键词 → 注入 qzone JSON 字段 → 主 LLM 自行判断是否填内容 → 独立 LLM 二次验证（`_should_post_qzone`）→ 通过后异步发帖
-- **每日自动发帖**：清醒时段（8-22点）10% 概率触发，内容基于当天 diary 记忆，无则随机
+- **每日自动发帖**：清醒时段（8-21点）10% 概率触发，内容基于当天 diary 记忆，无则随机
 - 发帖记录保存在 `data/instances/{qq}/qzone_posts.json`，最多 200 条
 - 发帖状态（当天是否已发）保存在 `data/instances/{qq}/qzone_state.json`
 - WebUI 可手动触发发帖（自动生成内容）并查看历史
@@ -134,8 +134,8 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 
 **全局心情系统：**
 - `DuduMood` 单例，被 proactive scheduler 和 message handler 共享
-- 22:00-07:00 固定犯困/睡着（energy 5-8%）
-- 07:00-22:00 清醒，10% 概率随机犯困，醒来后 energy×2
+- 21:00-23:00 固定犯困，23:00-08:00 固定睡着（energy 5-8%）
+- 08:00-21:00 清醒，10% 概率随机犯困，醒来后 energy×2
 - `system_mood_context()` 注入系统 prompt
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 

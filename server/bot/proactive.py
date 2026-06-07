@@ -83,9 +83,9 @@ class ProactiveScheduler:
         return datetime.now(timezone(timedelta(hours=8))).hour
 
     def _is_sleep_time(self) -> bool:
-        """22:00-08:00 = core quiet hours."""
+        """23:00-08:00 = core quiet hours."""
         h = self._hour_utc8()
-        return h >= 22 or h < 8
+        return h >= 23 or h < 8
 
     # ── sleep override (memory-based) ───────────────────────
 

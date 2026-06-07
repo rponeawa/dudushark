@@ -9,18 +9,18 @@ import time
 from datetime import datetime, timezone
 
 _HOURLY_BASELINE = {
-    0: 0.05, 1: 0.02, 2: 0.01, 3: 0.01, 4: 0.02, 5: 0.05,
-    6: 0.12, 7: 0.22, 8: 0.38, 9: 0.52, 10: 0.58, 11: 0.58,
+    0: 0.02, 1: 0.01, 2: 0.01, 3: 0.01, 4: 0.02, 5: 0.05,
+    6: 0.08, 7: 0.12, 8: 0.25, 9: 0.42, 10: 0.52, 11: 0.58,
     12: 0.48, 13: 0.42, 14: 0.48, 15: 0.52, 16: 0.58, 17: 0.62,
-    18: 0.72, 19: 0.82, 20: 0.88, 21: 0.68, 22: 0.38, 23: 0.18,
+    18: 0.72, 19: 0.82, 20: 0.72, 21: 0.30, 22: 0.12, 23: 0.05,
 }
 
 _HOURLY_FLAVOR = {
-    (0, 7): "夜深了，你睡得正香，被吵醒了也迷迷糊糊的。回复要非常简短，不想说话。",
-    (7, 10): "天刚亮不久。你刚刚迷迷糊糊地醒来，还有点没睡醒的感觉。说话可以带点迷糊和软绵绵的感觉。",
-    (10, 18): "现在是白天，你精神不错。说话可以比平时活泼一些。",
-    (18, 22): "到了晚上，你反而最精神了！可以多一点点调皮和活泼。",
-    (22, 24): "夜深了，你有点累了，开始犯困。说话会变得简短慵懒。",
+    (0, 8): "夜深了，你睡得正香，被吵醒了也迷迷糊糊的。回复要非常简短，不想说话。",
+    (8, 10): "天刚亮不久。你刚刚迷迷糊糊地醒来，还有点没睡醒的感觉。说话可以带点迷糊和软绵绵的感觉。",
+    (10, 21): "现在是白天，你精神不错。说话可以比平时活泼一些。到了晚上反而最精神。",
+    (21, 23): "夜深了，你开始犯困了。说话会变得简短慵懒。",
+    (23, 24): "深夜了，你已经睡着了。被吵醒的话迷迷糊糊的。",
 }
 
 _SLEEP_FLAVOR = {
@@ -107,13 +107,13 @@ class DuduMood:
     def _full_update(self, now: float):
         self._last_update = now
         hour = self._hour()
-        # 深夜 0-7 点固定为睡眠状态，22-24 固定为困了
-        if 0 <= hour < 7:
+        # 23-8 固定睡着，21-23 固定犯困
+        if hour >= 23 or hour < 8:
             self.sleep_state = "sleeping"
             self.sleep_state_until = now + 3600
             self.energy = 0.05
             return
-        if hour >= 22:
+        if 21 <= hour < 23:
             self.sleep_state = "sleepy"
             self.sleep_state_until = now + 1800
             self.energy = 0.08
@@ -138,9 +138,9 @@ class DuduMood:
         self._offset_until = now + random.randint(7200, 14400)
 
     def _tick_sleep(self, now: float):
-        # 过了 7 点还没醒 → 强制醒来
+        # 过了 8 点还没醒 → 强制醒来
         if self.sleep_state == "sleeping":
-            if self._hour() >= 7:
+            if self._hour() >= 8:
                 self.sleep_state = "just_woke"
                 self.sleep_state_until = now + random.randint(180, 480)
             return
