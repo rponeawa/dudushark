@@ -498,6 +498,15 @@ class MessageHandler:
                     return [ReplyPart(f"啊呜...内容生成失败了: {e}")]
                 if not _qzone_content:
                     return [ReplyPart("啊呜...想不出说什么～")]
+                # 先回复"好的鱼去发"
+                _ack_msg = "好～鱼这就去发！啊呜～"
+                from server.bot.onebot_handler import onebot_server as _qzone_obs
+                _qzone_client = _qzone_obs.get_client(self.bot_qq)
+                if _qzone_client and _qzone_client.connected:
+                    if is_group:
+                        await _qzone_client.send_group_msg(group_id, _ack_msg)
+                    else:
+                        await _qzone_client.send_private_msg(user_id, _ack_msg)
                 from server.qzone import QzoneClient
                 _qzone_cli = QzoneClient(self.bot_qq)
                 _ok, _msg = await _qzone_cli.publish_post(_qzone_content[:200])
@@ -514,9 +523,24 @@ class MessageHandler:
                             pass
                     _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
                     _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
-                    return [ReplyPart(f"发好啦～啊呜～\n「{_qzone_content}」")]
+                    # 发送结果确认
+                    _result_msg = f"发好啦～啊呜～\n「{_qzone_content}」"
+                    if _qzone_client and _qzone_client.connected:
+                        await asyncio.sleep(1.5)
+                        if is_group:
+                            await _qzone_client.send_group_msg(group_id, _result_msg)
+                        else:
+                            await _qzone_client.send_private_msg(user_id, _result_msg)
+                    return []
                 else:
-                    return [ReplyPart(f"啊呜...发空间失败了: {_msg}")]
+                    _fail_msg = f"啊呜...发空间失败了: {_msg}"
+                    if _qzone_client and _qzone_client.connected:
+                        await asyncio.sleep(1.5)
+                        if is_group:
+                            await _qzone_client.send_group_msg(group_id, _fail_msg)
+                        else:
+                            await _qzone_client.send_private_msg(user_id, _fail_msg)
+                    return []
             # 不匹配意图则继续正常对话流程
 
         # 检查发送者是否具有"家族成员"角色（role 中含"妈"字的为家人）
