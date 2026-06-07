@@ -542,13 +542,29 @@ class MessageHandler:
                             pass
                     _qposts.insert(0, {"content": _qzone_content, "created": time.time()})
                     _qpath.write_text(json.dumps(_qposts[:200], ensure_ascii=False, indent=2))
-                    # 简单确认，不展示内容
+                    # LLM 生成发帖成功的确认
+                    _qzone_done_prompt = (
+                        "你是嘟嘟鲨鱼，一只来自鲨鱼星的赛博大鲨鱼。"
+                        "你刚发完一条 QQ 空间说说，要回一句话表示发好了。"
+                        "简短自然，用'鱼'自称，可以用'啊呜～'。不要加引号，不要重复说说内容。直接输出那句话。"
+                    )
+                    try:
+                        _done_msg = await _call_llm(
+                            self.cfg.llm.base_url, self.cfg.llm.api_key,
+                            {"model": self.cfg.llm.model, "messages": [{"role": "user", "content": _qzone_done_prompt}],
+                             "max_tokens": 600, "temperature": 0.9},
+                        )
+                        _done_msg = _done_msg.strip().strip('"')
+                        if not _done_msg:
+                            _done_msg = "发好啦～啊呜～"
+                    except Exception:
+                        _done_msg = "发好啦～啊呜～"
                     if _qzone_client and _qzone_client.connected:
                         await asyncio.sleep(2.0)
                         if is_group:
-                            await _qzone_client.send_group_msg(group_id, "发好啦～啊呜～")
+                            await _qzone_client.send_group_msg(group_id, _done_msg)
                         else:
-                            await _qzone_client.send_private_msg(user_id, "发好啦～啊呜～")
+                            await _qzone_client.send_private_msg(user_id, _done_msg)
                     return []
                 else:
                     if _qzone_client and _qzone_client.connected:
