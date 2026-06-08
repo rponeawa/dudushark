@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, Reminder, QzonePost } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, EmotionState, Reminder, QzonePost } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -29,6 +29,35 @@ const SLEEP_ICON: Record<string, string> = {
   night_owl: "dark_mode",
   daydream: "cloud",
 };
+
+const EMOTION_ICONS: Record<string, string> = {
+  "开心": "sentiment_satisfied", "生气": "sentiment_dissatisfied",
+  "难过": "sentiment_sad", "兴奋": "celebration", "撒娇": "favorite",
+  "平静": "self_improvement", "困惑": "psychology", "傲娇": "mood",
+};
+
+function EmotionCard({ emotion }: { emotion: EmotionState }) {
+  const pct = Math.round(emotion.intensity * 100);
+  let color = "var(--green)";
+  if (emotion.current === "生气" || emotion.current === "难过") color = "var(--red)";
+  else if (emotion.current === "兴奋" || emotion.current === "撒娇") color = "var(--accent)";
+  else if (emotion.current === "困惑") color = "var(--yellow)";
+
+  return (
+    <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <span className="material-symbols-outlined" style={{ fontSize: "1.4rem", color: "var(--text-dim)" }}>
+        {EMOTION_ICONS[emotion.current] || "mood"}
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{emotion.current}</div>
+        <div style={{ height: 5, background: "var(--bg-hover)", borderRadius: 3, overflow: "hidden", marginTop: 4 }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3, transition: "width 0.5s" }} />
+        </div>
+      </div>
+      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{pct}%</span>
+    </div>
+  );
+}
 
 function MoodCard({ mood }: { mood: MoodState }) {
   const energyPct = Math.round(mood.energy * 100);
@@ -237,15 +266,7 @@ export default function Status() {
           {detail.emotion && (
             <div className="form-group" style={{ marginBottom: 12 }}>
               <label>情绪</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                <span style={{
-                  padding: "4px 12px", borderRadius: 4, fontSize: 13,
-                  background: "var(--accent)", color: "#fff",
-                }}>{detail.emotion.current}</span>
-                <span style={{ fontSize: 13, color: "var(--text)" }}>
-                  {Math.round(detail.emotion.intensity * 100)}%
-                </span>
-              </div>
+              <EmotionCard emotion={detail.emotion} />
             </div>
           )}
           <div className="form-row">
