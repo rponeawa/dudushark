@@ -10,7 +10,7 @@ export default function PausedGroupsPage({ activeQQ }: Props) {
   const load = async () => {
     if (!activeQQ) return;
     setLoading(true);
-    try { setGroups(await getPausedGroups(activeQQ)); } catch {}
+    try { const d = await getPausedGroups(activeQQ); setGroups(d.paused_groups); } catch {}
     setLoading(false);
   };
   useEffect(() => { load(); }, [activeQQ]);

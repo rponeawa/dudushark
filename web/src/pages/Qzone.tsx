@@ -16,7 +16,7 @@ export default function QzonePage({ activeQQ }: Props) {
   const load = async () => {
     if (!activeQQ) return;
     setLoading(true);
-    try { setPosts(await getQzonePosts(activeQQ)); } catch {}
+    try { const d = await getQzonePosts(activeQQ); setPosts(d.posts); } catch {}
     setLoading(false);
   };
   useEffect(() => { load(); }, [activeQQ]);

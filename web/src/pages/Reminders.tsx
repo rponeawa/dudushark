@@ -15,7 +15,7 @@ export default function RemindersPage({ activeQQ }: Props) {
   const load = async () => {
     if (!activeQQ) return;
     setLoading(true);
-    try { setReminders(await getReminders(activeQQ)); } catch {}
+    try { const d = await getReminders(activeQQ); setReminders(d.reminders); } catch {}
     setLoading(false);
   };
   useEffect(() => { load(); }, [activeQQ]);
