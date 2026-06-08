@@ -1044,14 +1044,14 @@ class MessageHandler:
             reply_text = reply_text[2:].strip()
 
         if not reply_text or reply_text.strip() == "[SKIP]":
-            return []
+            return result if result else []
 
         # 群聊二次验证：主 LLM 决定回复后，独立 LLM 用上下文最终确认
         if is_group:
             override = await self._should_skip_group(text, group_id, mentioned)
             if override:
                 logger.info(f"[{self.bot_qq}] Post-reply SKIP override for {group_id}")
-                return []
+                return result if result else []
 
         # JSON 解析失败时，异步提取记忆（兜底），短超时不影响回复
         if not data and reply_text and len(reply_text) > 10:
