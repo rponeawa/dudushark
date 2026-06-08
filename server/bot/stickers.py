@@ -70,19 +70,19 @@ class StickerLibrary:
             lines.append(f"  [{s['id']}] {s['description']} — {', '.join(s.get('tags',[]))}")
         return "\n".join(lines)
 
-    def search(self, query: str, n: int = 5) -> list[dict]:
-        """Vector search with keyword fallback."""
-        if not query:
-            return self.stickers[-n:]
-        if not self.stickers:
+    def search(self, query: str, n: int = 5, min_score: float = 0.4) -> list[dict]:
+        """Vector search with similarity threshold. Below threshold = no match."""
+        if not query or not self.stickers:
             return []
         results = []
-        # 向量搜索
         try:
             vs = self._get_vs()
-            raw = vs.search(query, n)
+            raw = vs.search(query, max(n * 2, 10))
             seen = set()
             for r in raw:
+                score = r.get("score", 0)
+                if score < min_score:
+                    continue
                 sid = r.get("meta", {}).get("id") if r.get("meta") else None
                 if sid is None:
                     sid = int(r["id"]) if r["id"].isdigit() else None
@@ -92,19 +92,11 @@ class StickerLibrary:
                         if s["id"] == sid:
                             results.append(s)
                             break
-        except Exception:
-            pass
-        # 关键字兜底：向量没命中时补
-        if len(results) < n:
-            q = query.lower()
-            for s in self.stickers:
-                if s in results:
-                    continue
-                if q in s.get("description", "").lower() or any(q in t.lower() for t in s.get("tags", [])):
-                    results.append(s)
                 if len(results) >= n:
                     break
-        return results[:n]
+        except Exception:
+            pass
+        return results
 
     def mark_used(self, sticker_id: int):
         for s in self.stickers:
