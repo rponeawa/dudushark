@@ -148,10 +148,13 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 注入 system prompt，前端状态页显示情绪+进度条
 
 **表情包收藏：**
-- `StickerLibrary` 管理收藏的表情包，图片下载落盘（QQ URL 会过期）
-- LLM 通过 `save_sticker` 收藏（含描述+标签），`send_sticker` 向量搜索后发 CQ base64 图片
-- 向量搜索（ChromaDB）+ 相似度阈值 0.4。URL 去重 + 已收藏列表注入 prompt
+- `StickerLibrary` 管理收藏的表情包，图片下载落盘（QQ URL 会过期），MD5 去重
+- LLM 通过 `save_sticker` 收藏（含描述+标签），`send_sticker` 向量搜索后独立发送
+- 向量搜索用 `run_in_executor` 避免同步 HTTP 阻塞事件循环。相似度阈值 0.4
+- **重要坑**：表情包 CQ base64 图片（~130KB）**必须用 OneBot 独立发送**（`asyncio.create_task` + 计算延迟），不能放进 result 管道。放进 result 会导致 `send_private_msg` 处理大消息时阻塞整个事件循环，所有后续消息发不出去
+- `send_sticker` 填简短关键词（2-5字），不要填完整描述，否则向量搜索匹配不到
 - 图片代理端点 `/api/sticker-image` 免登录，前端表情包 tab 可浏览/删除
+- 已有收藏列表注入 prompt，LLM 存之前就知道哪些已有。重复存时系统注入提示
 
 **主动消息 + 提醒：**
 - 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话（默认 0.15 × 精力）
