@@ -222,26 +222,55 @@ class MessageHandler:
         except Exception:
             pass
 
-    def _pause_proactive_for(self, user_id: str, reason: str):
-        """暂停对某用户的主动消息。系统根据原因计算暂停时长。"""
-        import datetime as _dt
+    def _pause_proactive_for(self, user_id: str, until_text: str):
+        """LLM 输出自然语言暂停时间，系统解析为时间戳。"""
+        import datetime as _dt, re as _re
         tz = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
         now = _dt.datetime.now(tz)
-        r = reason.lower()
-        # 睡觉相关 → 到第二天早上 8 点
-        if any(w in r for w in ("睡", "晚安", "night", "困", "休息", "眠")):
-            wake = now.replace(hour=8, minute=0, second=0)
-            if now.hour >= 3:
-                wake += _dt.timedelta(days=1)
-            until = wake.timestamp()
-        # 忙/工作 → 4 小时
-        elif any(w in r for w in ("忙", "工作", "开会", "事情", "事")):
-            until = now.timestamp() + 14400
-        # 默认 → 2 小时
+        t = until_text.strip()
+
+        # "明天早上" / "明早" / "明天" / "睡醒" → 明天 8:00
+        if any(w in t for w in ("明天", "明早", "睡醒", "起床")):
+            until = now.replace(hour=8, minute=0, second=0) + _dt.timedelta(days=1)
+        # "今晚" / "晚上" → 今天 20:00（如果已经过了20点则明天8点）
+        elif "今晚" in t or "晚上" in t:
+            until = now.replace(hour=20, minute=0, second=0)
+            if until <= now:
+                until = now.replace(hour=8, minute=0, second=0) + _dt.timedelta(days=1)
+        # "X小时后" / "X小时"
+        elif m := _re.search(r"(\d+)\s*小?时", t):
+            hours = int(m.group(1))
+            until = (now + _dt.timedelta(hours=hours)).timestamp()
+        # "X分钟后" / "X分钟"
+        elif m := _re.search(r"(\d+)\s*分", t):
+            mins = int(m.group(1))
+            until = (now + _dt.timedelta(minutes=mins)).timestamp()
+        # "下午" / "中午" / "午后" → 今天对应时间
+        elif "下午" in t:
+            until = now.replace(hour=14, minute=0, second=0)
+            if until <= now:
+                until += _dt.timedelta(days=1)
+        # "午饭后" / "吃完" → 13:00
+        elif any(w in t for w in ("午饭", "吃完", "饭后")):
+            until = now.replace(hour=13, minute=0, second=0)
+            if until <= now:
+                until += _dt.timedelta(days=1)
         else:
-            until = now.timestamp() + 7200
+            # 默认：含"睡/困/休息"等 → 明天8点，否则 → 2小时
+            if any(w in t for w in ("睡", "困", "休息", "眠", "觉")):
+                until = now.replace(hour=8, minute=0, second=0)
+                if now.hour >= 3:
+                    until += _dt.timedelta(days=1)
+                until = until.timestamp()
+            else:
+                until = now.timestamp() + 7200
+
+        # 确保 until 是 timestamp
+        if isinstance(until, _dt.datetime):
+            until = until.timestamp()
+
         self._set_proactive_pause(user_id, until)
-        logger.info(f"[{self.bot_qq}] Proactive paused for {user_id} until {_dt.datetime.fromtimestamp(until, tz).strftime('%H:%M')} (reason: {reason})")
+        logger.info(f"[{self.bot_qq}] Proactive paused for {user_id} until {_dt.datetime.fromtimestamp(until, tz).strftime('%m-%d %H:%M')} (\"{until_text}\")")
 
     def _set_proactive_pause(self, user_id: str, until_ts: float):
         from server.config import get_instance_dir
@@ -582,7 +611,7 @@ class MessageHandler:
             "- emotion: 你当前的情绪（只能有一种）。可选：开心/生气/难过/撒娇/平静。变了才填，没变留null。\n"
             "- save_sticker: 收藏对方发的表情包。你觉得可爱、有趣、鲨鱼相关、啊呜风格的都可以存——如果你在回复里夸它了，顺手存下来。但看不懂的、奇怪的、恶心的不要存。格式: {\"url\":\"图片URL\",\"description\":\"描述\",\"tags\":[\"标签\"]}，不喜欢就null。\n"
             "- send_sticker: 发收藏的表情。填简短关键词（2-5个字），不要填完整描述。偶尔用，不要每次都发。null=不发。\n"
-            "- pause_proactive: 暂停对该用户的主动消息。对方说去睡了/去忙了/别打扰时填（如\"去睡了\"/\"在忙\"），系统自动算暂停多久。绝大部分时候不触发，null即可。\n"
+            "- pause_proactive: 暂停对该用户的主动消息。你觉得不该打扰对方时填，填暂停到什么时候（如\"明天早上\"/\"两小时后\"/\"到晚上\"），系统会自动算具体时间。绝大部分时候不触发，null即可。\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
