@@ -232,42 +232,27 @@ class MessageHandler:
         # "明天早上" / "明早" / "明天" / "睡醒" → 明天 8:00
         if any(w in t for w in ("明天", "明早", "睡醒", "起床")):
             until = now.replace(hour=8, minute=0, second=0) + _dt.timedelta(days=1)
-        # "今晚" / "晚上" → 今天 20:00（如果已经过了20点则明天8点）
+        # "今晚" / "晚上" → 今天 20:00（过了则明天 8:00）
         elif "今晚" in t or "晚上" in t:
             until = now.replace(hour=20, minute=0, second=0)
             if until <= now:
                 until = now.replace(hour=8, minute=0, second=0) + _dt.timedelta(days=1)
         # "X小时后" / "X小时"
         elif m := _re.search(r"(\d+)\s*小?时", t):
-            hours = int(m.group(1))
-            until = (now + _dt.timedelta(hours=hours)).timestamp()
+            until = now + _dt.timedelta(hours=int(m.group(1)))
         # "X分钟后" / "X分钟"
         elif m := _re.search(r"(\d+)\s*分", t):
-            mins = int(m.group(1))
-            until = (now + _dt.timedelta(minutes=mins)).timestamp()
-        # "下午" / "中午" / "午后" → 今天对应时间
+            until = now + _dt.timedelta(minutes=int(m.group(1)))
+        # "下午" → 14:00
         elif "下午" in t:
             until = now.replace(hour=14, minute=0, second=0)
             if until <= now:
                 until += _dt.timedelta(days=1)
-        # "午饭后" / "吃完" → 13:00
-        elif any(w in t for w in ("午饭", "吃完", "饭后")):
-            until = now.replace(hour=13, minute=0, second=0)
-            if until <= now:
-                until += _dt.timedelta(days=1)
+        # 默认 → 2 小时
         else:
-            # 默认：含"睡/困/休息"等 → 明天8点，否则 → 2小时
-            if any(w in t for w in ("睡", "困", "休息", "眠", "觉")):
-                until = now.replace(hour=8, minute=0, second=0)
-                if now.hour >= 3:
-                    until += _dt.timedelta(days=1)
-                until = until.timestamp()
-            else:
-                until = now.timestamp() + 7200
+            until = now + _dt.timedelta(hours=2)
 
-        # 确保 until 是 timestamp
-        if isinstance(until, _dt.datetime):
-            until = until.timestamp()
+        until = until.timestamp()
 
         self._set_proactive_pause(user_id, until)
         logger.info(f"[{self.bot_qq}] Proactive paused for {user_id} until {_dt.datetime.fromtimestamp(until, tz).strftime('%m-%d %H:%M')} (\"{until_text}\")")
