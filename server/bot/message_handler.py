@@ -649,10 +649,11 @@ class MessageHandler:
                 for vt in voice_transcripts:
                     text = text.replace("[语音]", f"[语音转文字：{vt}]", 1)
 
-        # 多模态：有图片时使用 content 数组格式
+        # 多模态：有图片时使用 content 数组格式，同时附上 URL 供 save_sticker 使用
         if images:
-            content_parts = [{"type": "text", "text": f"{prefix}{display_name} 说: {text}"}]
-            for img_url in images[:3]:  # 最多3张图，避免 context 过大
+            url_hint = "\n".join(f"[图片{i+1} URL: {u}]" for i, u in enumerate(images[:3]))
+            content_parts = [{"type": "text", "text": f"{prefix}{display_name} 说: {text}\n{url_hint}"}]
+            for img_url in images[:3]:
                 content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
             user_msg = {"role": "user", "content": content_parts}
         else:
