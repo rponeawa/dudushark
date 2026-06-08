@@ -63,7 +63,7 @@ body, #root { min-height: 100vh; }
 
 /* ---- App Layout ---- */
 
-.app-layout { display: flex; min-height: 100vh; }
+.app-layout { display: flex; height: 100vh; overflow: hidden; }
 
 /* ---- Sidebar ---- */
 
@@ -133,7 +133,7 @@ body, #root { min-height: 100vh; }
 /* ---- Main ---- */
 
 .main-content {
-  flex: 1; margin-left: 0; overflow-x: hidden;
+  flex: 1; margin-left: 0; overflow-y: auto; overflow-x: hidden;
   padding: 64px 20px 0; max-width: 1200px; width: 100%; min-width: 0;
   transition: margin-left 0.25s ease;
 }
