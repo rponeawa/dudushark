@@ -112,8 +112,8 @@ export interface MoodState {
 }
 
 export interface EmotionState {
-  values: Record<string, number>;
-  dominant: string;
+  current: string;
+  intensity: number;
 }
 
 export interface InstanceDetailStatus {

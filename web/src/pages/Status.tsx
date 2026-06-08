@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, EmotionState, Reminder, QzonePost } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, Reminder, QzonePost } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -236,20 +236,15 @@ export default function Status() {
           )}
           {detail.emotion && (
             <div className="form-group" style={{ marginBottom: 12 }}>
-              <label>情绪 ({detail.emotion.dominant})</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                {Object.entries(detail.emotion.values).map(([k, v]) => {
-                  const pct = Math.round(v * 100);
-                  if (pct < 5) return null;
-                  return (
-                    <span key={k} style={{
-                      padding: "2px 8px", borderRadius: 4, fontSize: 12,
-                      background: pct > 50 ? "var(--accent)" : "var(--bg-card)",
-                      color: pct > 50 ? "#fff" : "var(--text-dim)",
-                      border: "1px solid var(--border)",
-                    }}>{k} {pct}%</span>
-                  );
-                })}
+              <label>情绪</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                <span style={{
+                  padding: "4px 12px", borderRadius: 4, fontSize: 13,
+                  background: "var(--accent)", color: "#fff",
+                }}>{detail.emotion.current}</span>
+                <span style={{ fontSize: 13, color: "var(--text)" }}>
+                  {Math.round(detail.emotion.intensity * 100)}%
+                </span>
               </div>
             </div>
           )}
