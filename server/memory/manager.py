@@ -6,12 +6,22 @@
 import re
 import json
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
 from server.config import DATA_DIR, get_memory_dir, get_chroma_dir
 from server.memory.vector_store import VectorStore
+
+_CN_TZ = timezone(timedelta(hours=8))
+
+
+def _cn_now() -> datetime:
+    return datetime.now(_CN_TZ)
+
+
+def _cn_now_str() -> str:
+    return _cn_now().strftime("%Y-%m-%dT%H:%M:%S+08")
 
 
 class MemoryManager:
@@ -42,7 +52,7 @@ class MemoryManager:
 
     def remember(self, user_id: str, category: str, title: str, content: str) -> bool:
         """写入或更新一条记忆，同步向量索引。返回 True=新建, False=更新。"""
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = _cn_now_str()
         entry_id = self._make_entry_id(user_id, category, title)
         filepath = self._entry_file(user_id, category, title)
         is_new = not filepath.exists()
@@ -133,7 +143,7 @@ class MemoryManager:
         """获取最近 N 天的记忆。"""
         from datetime import timedelta
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (_cn_now() - timedelta(days=days)).strftime("%Y-%m-%d")
         user_dir = self._read_user_dir(user_id)
         if not user_dir:
             return []
