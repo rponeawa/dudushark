@@ -29,8 +29,10 @@ export default function Stickers({ activeQQ }: Props) {
       <div className="panel">
         <div className="panel-header">
           <h2>表情包收藏</h2>
-          <span className="convo-tag private">{count} 个</span>
-          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="convo-tag private">{count} 个</span>
+            <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          </div>
         </div>
         {loading ? <p className="text-dim">加载中...</p> : stickers.length === 0 ? (
           <p className="text-dim" style={{ padding: 12 }}>暂无收藏的表情包。嘟嘟遇到喜欢的表情会自己存下来～</p>
@@ -38,7 +40,7 @@ export default function Stickers({ activeQQ }: Props) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
             {stickers.map((s) => (
               <div key={s.id} className="stat-card" style={{ padding: 10 }}>
-                <img src={s.url} alt={s.description}
+                <img src={`/api/sticker-image?qq=${activeQQ}&id=${s.id}`} alt={s.description}
                   style={{ width: "100%", height: 130, objectFit: "contain", borderRadius: 6, background: "var(--bg)" }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 <div style={{ marginTop: 8, fontSize: 13 }}>{s.description}</div>

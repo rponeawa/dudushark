@@ -44,8 +44,10 @@ export default function PendingRelaysPage({ activeQQ }: Props) {
       <div className="panel">
         <div className="panel-header">
           <h2>待发送代传话</h2>
-          <span className="convo-tag private">{pending.length} 条</span>
-          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="convo-tag private">{pending.length} 条</span>
+            <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          </div>
         </div>
         {loading ? <p className="text-dim">加载中...</p> : pending.length === 0 ? (
           <p className="text-dim" style={{ padding: 12 }}>暂无待发送的代传话</p>

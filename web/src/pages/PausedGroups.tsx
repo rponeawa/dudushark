@@ -28,8 +28,10 @@ export default function PausedGroupsPage({ activeQQ }: Props) {
       <div className="panel">
         <div className="panel-header">
           <h2>暂停的群聊</h2>
-          <span className="convo-tag private">{groups.length} 个</span>
-          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="convo-tag private">{groups.length} 个</span>
+            <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+          </div>
         </div>
         {loading ? <p className="text-dim">加载中...</p> : groups.length === 0 ? (
           <p className="text-dim" style={{ padding: 12 }}>暂无被暂停的群聊。管理员发送 /pause 可暂停群消息</p>
