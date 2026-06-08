@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>嘟嘟鲨鱼 - 实时日志</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#e0e0e0;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:13px;height:100vh;display:flex;flex-direction:column}
+#controls{display:flex;gap:10px;padding:8px 12px;background:#141414;border-bottom:1px solid #222;align-items:center}
+#controls button{padding:4px 12px;border:1px solid #444;background:#1a1a1a;color:#ccc;cursor:pointer;border-radius:3px;font-size:12px}
+#controls button:hover{background:#2a2a2a;border-color:#666}
+#controls button.paused{background:#332;border-color:#a55;color:#faa}
+#status{font-size:11px;color:#666;margin-left:auto}
+#log{flex:1;overflow-y:auto;padding:6px 12px;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+#log::-webkit-scrollbar{width:8px}
+#log::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="controls">
+  <button id="pauseBtn" onclick="togglePause()">暂停</button>
+  <button onclick="clearLog()">清屏</button>
+  <span id="status">连接中...</span>
+</div>
+<pre id="log"></pre>
+<script>
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+const pauseBtn = document.getElementById('pauseBtn');
+let paused = false;
+let ws = null;
+let reconnectTimer = null;
+
+function togglePause() {
+  paused = !paused;
+  pauseBtn.textContent = paused ? '▶ 继续' : '暂停';
+  pauseBtn.classList.toggle('paused', paused);
+}
+
+function clearLog() {
+  logEl.textContent = '';
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/api/ws/logs');
+  statusEl.textContent = '连接中...';
+  statusEl.style.color = '#666';
+  ws.onopen = () => {
+    statusEl.textContent = '已连接';
+    statusEl.style.color = '#4a4';
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+  ws.onmessage = (e) => {
+    if (paused) return;
+    logEl.textContent += e.data + '\n';
+    if (logEl.textContent.length > 500000) {
+      logEl.textContent = logEl.textContent.slice(-300000);
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+  ws.onclose = () => {
+    statusEl.textContent = '断开，3s后重连...';
+    statusEl.style.color = '#a44';
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+connect();
+</script>
+</body>
+</html>

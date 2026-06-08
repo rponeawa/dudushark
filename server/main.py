@@ -63,7 +63,7 @@ if STATIC_DIR.exists():
 
 @app.get("/logs")
 async def logs_page():
-    log_html = STATIC_DIR / "logs.html"
+    log_html = Path(__file__).parent / "webui" / "logs.html"
     return FileResponse(log_html) if log_html.exists() else HTMLResponse(status_code=404)
 
 
