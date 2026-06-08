@@ -1019,19 +1019,26 @@ class MessageHandler:
             # 发送收藏的表情
             send_s = data.get("send_sticker")
             if send_s and isinstance(send_s, str) and send_s.strip():
+                logger.info(f"[{self.bot_qq}] send_sticker requested: {send_s.strip()}")
                 import base64 as _b64
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
+                logger.info(f"[{self.bot_qq}] Sticker lib has {lib.count()} stickers, searching...")
                 matches = await lib.search(send_s.strip(), n=1)
+                logger.info(f"[{self.bot_qq}] Sticker search returned {len(matches)} matches")
                 if matches:
                     s = matches[0]
                     lib.mark_used(s["id"])
                     path = lib.get_path(s["id"])
+                    logger.info(f"[{self.bot_qq}] Sticker path: {path}, exists: {path.exists() if path else 'N/A'}")
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
+                        logger.info(f"[{self.bot_qq}] Sticker base64: {len(b64)} chars, adding to result")
                         result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
+                else:
+                    logger.info(f"[{self.bot_qq}] No sticker match for: {send_s.strip()}")
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -1044,6 +1051,7 @@ class MessageHandler:
             reply_text = reply_text[2:].strip()
 
         if not reply_text or reply_text.strip() == "[SKIP]":
+            logger.info(f"[{self.bot_qq}] Reply is SKIP/empty, result has {len(result)} parts")
             return result if result else []
 
         # 群聊二次验证：主 LLM 决定回复后，独立 LLM 用上下文最终确认
