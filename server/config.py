@@ -127,6 +127,9 @@ def get_reminders_path(qq: str) -> Path:
 def get_qzone_posts_path(qq: str) -> Path:
     return get_instance_dir(qq) / "qzone_posts.json"
 
+def get_pending_relays_path(qq: str) -> Path:
+    return get_instance_dir(qq) / "pending_relays.json"
+
 def get_qzone_state_path(qq: str) -> Path:
     return get_instance_dir(qq) / "qzone_state.json"
 

@@ -153,8 +153,10 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - `/resume` — 仅在暂停状态下由管理员发送，恢复消息处理
 - 暂停期间除 `/resume` 外所有消息静默忽略
 
-**管理员代传话（三层防护）：**
+**管理员代传话：**
 - 主 LLM 输出 relay → 独立 LLM 验证（无上文，只看原始消息）→ 30s 去重
+- **延迟发送**：按传话者要求延迟（最少1分钟），LLM 提取 delay_minutes，系统计算 send_at，后台定时检查
+- pending 代传话存储在 `pending_relays.json`，WebUI 可查看和取消
 - 仅管理员私聊可用，群聊完全不注入 relay 指令
 - 家族记忆仅 role 含"妈"的成员在私聊中注入
 
@@ -169,7 +171,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - diary: 同 memory 格式，值得写才写
 - forget: `{"category":"类别","title":"标题"}` — 删除记忆
 - remind: `{"at_utc": Unix秒, "content": "提醒内容"}` — 一次性定时提醒
-- relay: `{"to_role": "角色名", "content": "转达内容", "voice": null|"last"|"all", "voice_emotion": null|"..."}` — 管理员间代传话，可选语音
+- relay: `{"to_role":"角色名","content":"转达内容","voice":null|"last"|"all","voice_emotion":null|"...","delay_minutes":1}` — 管理员间代传话。延迟按传话者要求，未指定默认1分钟。WebUI 可查看/取消 pending
 - qzone: 字符串，QQ 空间说说内容。仅管理员消息且含关键词时字段可见，主 LLM 自行判断是否填
 - search: `"search":"关键词"` — LLM 请求网络搜索，与 reply 同时输出，系统异步执行搜索+二次 LLM
 
@@ -201,7 +203,8 @@ data/instances/{qq}/
   ├── conversations/{key}.jsonl
   ├── reminders.json
   ├── qzone_posts.json
-  └── qzone_state.json
+  ├── qzone_state.json
+  └── pending_relays.json
 ```
 
 ## API 路由

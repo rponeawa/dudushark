@@ -137,7 +137,11 @@ class MessageHandler:
         self._last_combined: dict[str, str] = {}
         self._last_relay_ts: float = 0.0
         self._last_relay_hash: str = ""
+        self._pending_relays: list[dict] = []
+        self._relay_checker_started = False
         self._load_conversations()
+        self._load_pending_relays()
+        self._ensure_relay_checker()
 
     def _save_paused_groups(self):
         """持久化暂停列表到 bot_config.json。"""
@@ -527,10 +531,11 @@ class MessageHandler:
             relay_example = ""
             if len(admin_roles) >= 2:
                 a, b = admin_roles[0], admin_roles[1]
-                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}说明天去看你\",\"voice\":null,\"voice_emotion\":null}}}}"
+                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}说明天去看你\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}}}}"
             messages.append({"role": "system", "content": (
                 f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
-                "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null}\n"
+                "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}\n"
+                "delay_minutes: 延迟多少分钟再发送。根据传话者的话来判断——\"半小时后告诉她\"就是30，\"明天再说\"就是到明天早上的分钟数，没提到延迟就填1。最少1分钟。填数字，别填null。\n"
                 "voice: 转达时也可以发语音。大部分时候null。对方要求发语音、撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n" +
                 (f"{relay_example}\n" if relay_example else "") +
                 "只有对方明确说\"帮我告诉XX/帮我转达给XX/跟XX说\"才触发。绝对不要主动转达。不确定该不该转达就不要转达。"
@@ -1195,13 +1200,13 @@ class MessageHandler:
             return False  # 出错时不发，宁可漏发不误发
 
     async def _relay_message(self, relay: dict, from_user_id: str):
-        """代传话给另一位管理员。仅管理员之间可用。"""
+        """代传话给另一位管理员。存储为 pending，延迟发送。"""
         try:
             to_role = str(relay.get("to_role", "")).strip()
             content = str(relay.get("content", "")).strip()
             if not to_role or not content:
                 return
-            # 防重复：30秒内相同内容不重复发送
+            # 防重复：30秒内相同内容不重复创建
             relay_hash = f"{from_user_id}:{to_role}:{content}"
             now = time.time()
             if relay_hash == self._last_relay_hash and now - self._last_relay_ts < 30:
@@ -1223,77 +1228,164 @@ class MessageHandler:
                 if str(a.get("qq", "")) == from_user_id:
                     from_role = a.get("role", "")
                     break
-            from_label = f"【{from_role}】" if from_role else "管理员"
-            relay_text = f"{from_label}让鱼转达：{content}"
+
+            # 延迟：最少1分钟，系统计算 send_at
+            delay_minutes = max(1, int(relay.get("delay_minutes", 1) or 1))
+            send_at = now + delay_minutes * 60
+
             relay_voice = relay.get("voice")
             relay_voice_emotion = str(relay.get("voice_emotion", "") or "").strip()
 
-            from server.bot.onebot_handler import onebot_server
-            client = onebot_server.get_client(self.bot_qq)
-            if client and client.connected:
-                parts = self._split_reply(relay_text)
-
-                # 语音转达：复用正常消息的分段 + 语音逻辑
-                if relay_voice and relay_voice in ("last", "all") and self.cfg.tts_enabled:
-                    if relay_voice == "all":
-                        tts_text = "".join(parts)
-                        audio = await self._tts_speak(tts_text, relay_voice_emotion or "撒娇")
-                        if audio:
-                            tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
-                            os.makedirs(tts_dir, exist_ok=True)
-                            fname = f"relay_{uuid.uuid4().hex[:8]}.wav"
-                            with open(os.path.join(tts_dir, fname), "wb") as wf:
-                                wf.write(audio)
-                            docker_path = f"/app/napcat/config/tts/{fname}"
-                            await client.send_private_voice(target_qq, docker_path)
-                            await asyncio.sleep(1.0)
-                            logger.info(f"[{self.bot_qq}] Relay voice(all) -> {target_qq}")
-                    else:  # last
-                        text_parts = parts[:-1] if len(parts) > 1 else []
-                        voice_part = parts[-1]
-                        for i, part in enumerate(text_parts):
-                            await client.send_private_msg(target_qq, part)
-                            if i < len(text_parts) - 1:
-                                await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
-                        audio = await self._tts_speak(voice_part, relay_voice_emotion or "撒娇")
-                        if audio:
-                            tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
-                            os.makedirs(tts_dir, exist_ok=True)
-                            fname = f"relay_{uuid.uuid4().hex[:8]}.wav"
-                            with open(os.path.join(tts_dir, fname), "wb") as wf:
-                                wf.write(audio)
-                            docker_path = f"/app/napcat/config/tts/{fname}"
-                            await client.send_private_voice(target_qq, docker_path)
-                            await asyncio.sleep(1.0)
-                            logger.info(f"[{self.bot_qq}] Relay voice(last) -> {target_qq}")
-
-                # 文字部分分段发送
-                for i, part in enumerate(parts):
-                    # voice=all 时跳过文字（已经发过语音了）
-                    if relay_voice == "all":
-                        break
-                    # voice=last 时跳过最后一段（已经发过语音了）
-                    if relay_voice == "last" and i == len(parts) - 1:
-                        break
-                    await client.send_private_msg(target_qq, part)
-                    if i < len(parts) - 1:
-                        await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
-
-                logger.info(f"[{self.bot_qq}] Relay: {from_user_id}({from_role}) -> {target_qq}({to_role}){' +voice' if relay_voice else ''}")
-                # 推送到前端
-                try:
-                    from server.webui.routes import push_event
-                    await push_event({
-                        "type": "relay", "qq": self.bot_qq,
-                        "from_user": from_user_id, "from_role": from_role,
-                        "to_user": target_qq, "to_role": to_role,
-                        "content": content,
-                        "voice": relay_voice,
-                    })
-                except Exception:
-                    pass
+            pending = {
+                "id": uuid.uuid4().hex[:8],
+                "from_user_id": from_user_id,
+                "from_role": from_role,
+                "to_role": to_role,
+                "to_user_id": target_qq,
+                "content": content,
+                "voice": relay_voice,
+                "voice_emotion": relay_voice_emotion,
+                "send_at": send_at,
+                "created_at": now,
+            }
+            self._pending_relays.append(pending)
+            self._save_pending_relays()
+            logger.info(f"[{self.bot_qq}] Relay pending: {from_role}->{to_role} in {delay_minutes}min, id={pending['id']}")
+            # 推送到前端
+            try:
+                from server.webui.routes import push_event
+                await push_event({
+                    "type": "relay_pending", "qq": self.bot_qq,
+                    "relay": pending,
+                })
+            except Exception:
+                pass
         except Exception as e:
-            logger.error(f"[{self.bot_qq}] Relay failed: {e}")
+            logger.error(f"[{self.bot_qq}] Relay enqueue failed: {e}")
+
+    async def _send_stored_relay(self, pending: dict):
+        """实际发送一条 pending relay。"""
+        from_label = f"【{pending['from_role']}】" if pending['from_role'] else "管理员"
+        relay_text = f"{from_label}让鱼转达：{pending['content']}"
+        relay_voice = pending.get("voice")
+        relay_voice_emotion = str(pending.get("voice_emotion", "") or "").strip()
+        target_qq = pending["to_user_id"]
+
+        from server.bot.onebot_handler import onebot_server
+        client = onebot_server.get_client(self.bot_qq)
+        if not client or not client.connected:
+            return
+
+        parts = self._split_reply(relay_text)
+
+        # 语音转达
+        if relay_voice and relay_voice in ("last", "all") and self.cfg.tts_enabled:
+            if relay_voice == "all":
+                tts_text = "".join(parts)
+                audio = await self._tts_speak(tts_text, relay_voice_emotion or "撒娇")
+                if audio:
+                    tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
+                    os.makedirs(tts_dir, exist_ok=True)
+                    fname = f"relay_{pending['id']}.wav"
+                    with open(os.path.join(tts_dir, fname), "wb") as wf:
+                        wf.write(audio)
+                    docker_path = f"/app/napcat/config/tts/{fname}"
+                    await client.send_private_voice(target_qq, docker_path)
+                    await asyncio.sleep(1.0)
+            else:  # last
+                text_parts = parts[:-1] if len(parts) > 1 else []
+                voice_part = parts[-1]
+                for i, part in enumerate(text_parts):
+                    await client.send_private_msg(target_qq, part)
+                    if i < len(text_parts) - 1:
+                        await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+                audio = await self._tts_speak(voice_part, relay_voice_emotion or "撒娇")
+                if audio:
+                    tts_dir = self.cfg.tts_host_dir or os.path.join(os.path.expanduser("~"), "napcat/config/tts")
+                    os.makedirs(tts_dir, exist_ok=True)
+                    fname = f"relay_{pending['id']}.wav"
+                    with open(os.path.join(tts_dir, fname), "wb") as wf:
+                        wf.write(audio)
+                    docker_path = f"/app/napcat/config/tts/{fname}"
+                    await client.send_private_voice(target_qq, docker_path)
+                    await asyncio.sleep(1.0)
+
+        # 文字部分分段发送
+        for i, part in enumerate(parts):
+            if relay_voice == "all":
+                break
+            if relay_voice == "last" and i == len(parts) - 1:
+                break
+            await client.send_private_msg(target_qq, part)
+            if i < len(parts) - 1:
+                await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+
+        logger.info(f"[{self.bot_qq}] Relay sent: {pending['from_role']}->{pending['to_role']} id={pending['id']}")
+        try:
+            from server.webui.routes import push_event
+            await push_event({
+                "type": "relay_sent", "qq": self.bot_qq,
+                "from_user": pending["from_user_id"], "from_role": pending["from_role"],
+                "to_user": target_qq, "to_role": pending["to_role"],
+                "content": pending["content"], "voice": relay_voice,
+                "id": pending["id"],
+            })
+        except Exception:
+            pass
+
+    def _load_pending_relays(self):
+        from server.config import get_pending_relays_path
+        path = get_pending_relays_path(self.bot_qq)
+        if path.exists():
+            try:
+                self._pending_relays = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                self._pending_relays = []
+        else:
+            self._pending_relays = []
+
+    def _save_pending_relays(self):
+        from server.config import get_pending_relays_path
+        path = get_pending_relays_path(self.bot_qq)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self._pending_relays, ensure_ascii=False, indent=2))
+
+    def _ensure_relay_checker(self):
+        if not self._relay_checker_started:
+            self._relay_checker_started = True
+            try:
+                asyncio.get_running_loop()
+                asyncio.create_task(self._check_pending_relays_loop())
+            except RuntimeError:
+                pass  # no event loop yet, will start on first interaction
+
+    async def _check_pending_relays_loop(self):
+        """后台循环：检查是否有到期的 pending relay。"""
+        while True:
+            await asyncio.sleep(10)
+            try:
+                if not self._pending_relays:
+                    continue
+                now = time.time()
+                due = [p for p in self._pending_relays if p.get("send_at", 0) <= now]
+                for p in due:
+                    self._pending_relays.remove(p)
+                    self._save_pending_relays()
+                    await self._send_stored_relay(p)
+            except Exception as e:
+                logger.error(f"[{self.bot_qq}] Pending relay check error: {e}")
+
+    def get_pending_relays(self) -> list[dict]:
+        return list(self._pending_relays)
+
+    def cancel_pending_relay(self, relay_id: str) -> bool:
+        for p in self._pending_relays:
+            if p.get("id") == relay_id:
+                self._pending_relays.remove(p)
+                self._save_pending_relays()
+                logger.info(f"[{self.bot_qq}] Relay cancelled: {relay_id}")
+                return True
+        return False
 
     def get_conversation(self, user_id: str = "", group_id: str = "", key: str = "") -> list[dict]:
         k = key if key else self._conv_key(user_id, group_id)

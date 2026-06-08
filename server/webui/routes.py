@@ -348,6 +348,23 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         raise HTTPException(500, f"发帖失败: {msg}")
 
 
+# ---- 代传话 pending 管理 ----
+
+@router.get("/instances/{qq}/pending_relays")
+async def list_pending_relays(qq: str):
+    handler = get_message_handler(qq)
+    return {"pending_relays": handler.get_pending_relays()}
+
+
+@router.delete("/instances/{qq}/pending_relays/{relay_id}")
+async def cancel_pending_relay(qq: str, relay_id: str):
+    handler = get_message_handler(qq)
+    ok = handler.cancel_pending_relay(relay_id)
+    if not ok:
+        raise HTTPException(404, "未找到该代传话")
+    return {"ok": True}
+
+
 @router.post("/instances/create")
 async def create_instance(qq: str, napcat_path: str = ""):
     cfg = load_global_config()
