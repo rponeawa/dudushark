@@ -1,10 +1,20 @@
 """
 DuduShark sticker collection — save liked stickers with vector search.
+Images are downloaded and stored locally since QQ URLs expire.
 """
 
+import asyncio
 import json
+import os
 import time
 from pathlib import Path
+
+
+def _sticker_dir(bot_qq: str) -> Path:
+    from server.config import get_instance_dir
+    p = get_instance_dir(bot_qq) / "stickers"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 class StickerLibrary:
@@ -39,18 +49,31 @@ class StickerLibrary:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(self.stickers, ensure_ascii=False, indent=2))
 
-    def add(self, url: str, description: str, tags: list[str] | None = None) -> dict | None:
+    async def add(self, url: str, description: str, tags: list[str] | None = None) -> dict | None:
+        """Download and save sticker locally. Deduplicates by URL. Async."""
         for s in self.stickers:
             if s.get("url") == url:
                 return None
         sid = len(self.stickers) + 1
+        # 下载图片落盘
+        fname = f"{sid}_{int(time.time())}.gif"
+        fpath = _sticker_dir(self.bot_qq) / fname
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    fpath.write_bytes(r.content)
+        except Exception:
+            fname = ""  # 下载失败不存文件，但记录仍保留
+
         entry = {
-            "id": sid, "url": url, "description": description,
-            "tags": tags or [], "saved_at": time.time(), "used_count": 0,
+            "id": sid, "url": url, "file": fname,
+            "description": description, "tags": tags or [],
+            "saved_at": time.time(), "used_count": 0,
         }
         self.stickers.append(entry)
         self._save()
-        # 写入向量索引
         try:
             vs = self._get_vs()
             text = f"{description} {' '.join(tags or [])}"
@@ -58,6 +81,14 @@ class StickerLibrary:
         except Exception:
             pass
         return entry
+
+    def add_sync(self, url: str, description: str, tags: list[str] | None = None) -> dict | None:
+        """Sync wrapper for add()."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        return loop.run_until_complete(self.add(url, description, tags))
 
     def existing_urls(self) -> list[str]:
         return [s["url"] for s in self.stickers]
@@ -71,7 +102,6 @@ class StickerLibrary:
         return "\n".join(lines)
 
     def search(self, query: str, n: int = 5, min_score: float = 0.4) -> list[dict]:
-        """Vector search with similarity threshold. Below threshold = no match."""
         if not query or not self.stickers:
             return []
         results = []
@@ -98,6 +128,14 @@ class StickerLibrary:
             pass
         return results
 
+    def get_path(self, sticker_id: int) -> Path | None:
+        for s in self.stickers:
+            if s["id"] == sticker_id and s.get("file"):
+                p = _sticker_dir(self.bot_qq) / s["file"]
+                if p.exists():
+                    return p
+        return None
+
     def mark_used(self, sticker_id: int):
         for s in self.stickers:
             if s["id"] == sticker_id:
@@ -108,6 +146,11 @@ class StickerLibrary:
     def remove(self, sticker_id: int) -> bool:
         for s in self.stickers:
             if s["id"] == sticker_id:
+                # 删除落盘文件
+                if s.get("file"):
+                    f = _sticker_dir(self.bot_qq) / s["file"]
+                    if f.exists():
+                        f.unlink()
                 self.stickers.remove(s)
                 self._save()
                 try:

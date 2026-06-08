@@ -362,21 +362,12 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
 
 @router.get("/sticker-image", include_in_schema=False)
 async def sticker_image(qq: str, id: int):
-    """代理表情包图片，绕过 QQ 图片的跨域/鉴权限制。无需登录。"""
+    """返回本地存储的表情包图片。无需登录。"""
+    from fastapi.responses import FileResponse
     lib = get_sticker_library(qq)
-    for s in lib.stickers:
-        if s["id"] == id:
-            url = s["url"]
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
-                try:
-                    r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                    if r.status_code == 200:
-                        from fastapi.responses import Response
-                        ct = r.headers.get("content-type", "image/gif")
-                        return Response(content=r.content, media_type=ct)
-                except Exception:
-                    pass
-            raise HTTPException(404, "图片加载失败")
+    path = lib.get_path(id)
+    if path:
+        return FileResponse(str(path), media_type="image/gif")
     raise HTTPException(404, "表情包不存在")
 
 

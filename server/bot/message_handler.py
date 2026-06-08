@@ -35,9 +35,22 @@ def _sanitize_for_llm(text: str) -> str:
     for pattern, replacement in _SENSITIVE_PATTERNS:
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     return text
+
+
 from server.search.bing import bing_search, format_search_results
 
 logger = logging.getLogger("dudushark.message")
+
+
+def _do_save_sticker(lib, save_s: dict, bot_qq: str):
+    """后台异步保存表情包（落盘+向量索引）。"""
+    async def _save():
+        try:
+            r = await lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
+            if r: logger.info(f"[{bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
+        except Exception as e:
+            logger.error(f"[{bot_qq}] Sticker save failed: {e}")
+    asyncio.create_task(_save())
 
 SPLIT_PATTERN = re.compile(r"(?<=[。！？\n～])(?<!啊呜～)\s*")
 
@@ -888,8 +901,7 @@ class MessageHandler:
                     if save_s and isinstance(save_s, dict) and save_s.get("url"):
                         from server.bot.stickers import get_sticker_library
                         lib = get_sticker_library(self.bot_qq)
-                        lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
-                        logger.info(f"[{self.bot_qq}] Sticker saved (search): {save_s.get('description', '')[:30]}")
+                        _do_save_sticker(lib, save_s, self.bot_qq)
 
                     from server.bot.onebot_handler import onebot_server
                     client = onebot_server.get_client(self.bot_qq)
@@ -989,8 +1001,7 @@ class MessageHandler:
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
-                lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
-                logger.info(f"[{self.bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
+                asyncio.create_task(_save_sticker_async(lib, save_s, self.bot_qq))
             # 发送收藏的表情
             send_s = data.get("send_sticker")
             if send_s and isinstance(send_s, str) and send_s.strip():
