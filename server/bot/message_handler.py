@@ -754,7 +754,7 @@ class MessageHandler:
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": "搜索互联网获取实时信息。只在确实需要查资料时才调用。发自己收藏的表情包用send_sticker字段，不要搜。",
+                    "description": "搜索互联网获取实时信息，如新闻、天气、最新事件、百科知识等。只在确实需要查资料时才调用。注意：发自己收藏的表情包用send_sticker字段，不要搜。",
                     "parameters": {
                         "type": "object",
                         "properties": {
