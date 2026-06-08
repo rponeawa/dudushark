@@ -18,6 +18,20 @@ from server.bot.persona import PERSONA_SYSTEM_PROMPT
 from server.config import get_instance_config
 from server.memory.manager import get_memory_manager
 from server.memory.context import ContextManager
+
+# 敏感词过滤：避免触发 StepFun 审查。匹配到的内容替换为无害占位符
+_SENSITIVE_PATTERNS = [
+    (r"(?<!\d)451(?!\d)", "[已过滤]"),
+    (r"(?<![a-zA-Z])gay(?![a-zA-Z])", "[已过滤]"),
+    (r"censorship[_\. ]?blocked", "[已过滤]"),
+    (r"审查拦截", "[已过滤]"),
+]
+
+
+def _sanitize_for_llm(text: str) -> str:
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
 from server.search.bing import bing_search, format_search_results
 
 logger = logging.getLogger("dudushark.message")
@@ -158,7 +172,8 @@ class MessageHandler:
 
     def _get_history(self, user_id: str, group_id: str = "", max_len: int = 40) -> list[dict]:
         key = self._conv_key(user_id, group_id)
-        return self._conversations.get(key, [])[-max_len:]
+        msgs = self._conversations.get(key, [])[-max_len:]
+        return [{**m, "content": _sanitize_for_llm(m.get("content", ""))} for m in msgs]
 
     def _append_history(self, user_id: str, role: str, content: str, group_id: str = "", proactive: bool = False):
         key = self._conv_key(user_id, group_id)
@@ -198,7 +213,9 @@ class MessageHandler:
                 for line in f.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if line:
-                        msgs.append(json.loads(line))
+                        m = json.loads(line)
+                        m["content"] = _sanitize_for_llm(m.get("content", ""))
+                        msgs.append(m)
                 if msgs:
                     self._conversations[key] = msgs
                     # 检测对话类型：群聊的合并消息包含多个不同说话人
@@ -296,6 +313,7 @@ class MessageHandler:
         # 合并消息用序号标注，让 LLM 知道每条消息的索引
         if len(texts) > 1:
             combined = "\n".join(f"[{i+1}] {n}: {t}" for i, (n, t) in enumerate(zip(names, texts)))
+        combined = _sanitize_for_llm(combined)
         last_msg_id = msg_ids[-1] if msg_ids else ""
         # name → user_id 映射，用于 LLM memory 中 user 字段
         names_map = dict(zip(names, user_ids_batch))
