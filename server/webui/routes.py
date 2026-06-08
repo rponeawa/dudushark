@@ -194,7 +194,7 @@ async def list_instances():
         instances.append(InstanceInfo(
             qq=qq,
             connected=client.connected if client else False,
-            napcat_running=(napcat and napcat.is_running) or (client and client.connected),
+            napcat_running=bool((napcat and napcat.is_running) or (client and client.connected)),
         ))
     return {"instances": [i.model_dump() for i in instances], "current": cfg.get("current_instance")}
 
