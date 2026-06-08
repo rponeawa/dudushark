@@ -1030,7 +1030,23 @@ class MessageHandler:
                     path = lib.get_path(s["id"])
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
-                        result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
+                        # 独立发送表情包，不走 result 管道
+                        _b64_val = b64
+                        _target = user_id
+                        _is_group = is_group
+                        _group_id = group_id
+                        _bot = self.bot_qq
+                        async def _send_sticker():
+                            await asyncio.sleep(0.5)
+                            from server.bot.onebot_handler import onebot_server
+                            client = onebot_server.get_client(_bot)
+                            if client and client.connected:
+                                if _is_group:
+                                    await client.send_group_msg(_group_id, f"[CQ:image,file=base64://{_b64_val}]")
+                                else:
+                                    await client.send_private_msg(_target, f"[CQ:image,file=base64://{_b64_val}]")
+                                logger.info(f"[{_bot}] Sticker sent")
+                        asyncio.create_task(_send_sticker())
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
                 else:
@@ -1047,15 +1063,14 @@ class MessageHandler:
             reply_text = reply_text[2:].strip()
 
         if not reply_text or reply_text.strip() == "[SKIP]":
-            logger.info(f"[{self.bot_qq}] Reply is SKIP/empty, result has {len(result)} parts")
-            return result if result else []
+            return []
 
         # 群聊二次验证：主 LLM 决定回复后，独立 LLM 用上下文最终确认
         if is_group:
             override = await self._should_skip_group(text, group_id, mentioned)
             if override:
                 logger.info(f"[{self.bot_qq}] Post-reply SKIP override for {group_id}")
-                return result if result else []
+                return []
 
         # JSON 解析失败时，异步提取记忆（兜底），短超时不影响回复
         if not data and reply_text and len(reply_text) > 10:
@@ -1069,8 +1084,6 @@ class MessageHandler:
         voice_mode = data.get("voice") if data else None
         voice_emotion = data.get("voice_emotion", "") if data else ""
         parts = self._split_reply(reply_text)
-        # 保留已加入 result 的内容（如 send_sticker），只追加文字/语音部分
-        existing = result
         result = []
 
         if voice_mode == "all":
@@ -1106,9 +1119,7 @@ class MessageHandler:
                 qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
                 result.append(ReplyPart(part, qid))
                 self._append_history(user_id, "assistant", part, group_id)
-        final = existing + result
-        logger.info(f"[{self.bot_qq}] _handle_impl returning {len(final)} parts: {[p.text[:40] for p in final]}")
-        return final
+        return result
 
     async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
         """JSON 解析失败时的记忆兜底提取。"""
