@@ -24,25 +24,25 @@ export default function RemindersPage({ activeQQ }: Props) {
 
   return (
     <div className="main-content">
-      <div className="page-header">
-        <h2>定时提醒</h2>
-        <span className="badge">{reminders.length} 条</span>
-        <button className="btn-ghost btn-sm" onClick={load} style={{ marginLeft: 12 }}>刷新</button>
-      </div>
-      {loading ? <p className="dim">加载中...</p> : reminders.length === 0 ? (
-        <div className="empty-state">暂无定时提醒。嘟嘟会在别人让她提醒时自动创建</div>
-      ) : (
-        <div className="list">
-          {reminders.map((r, i) => (
-            <div key={i} className="list-item">
-              <div className="list-item-title">{r.content}</div>
-              <div className="list-item-meta">
+      <div className="panel">
+        <div className="panel-header">
+          <h2>定时提醒</h2>
+          <span className="convo-tag private">{reminders.length} 条</span>
+          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+        </div>
+        {loading ? <p className="text-dim">加载中...</p> : reminders.length === 0 ? (
+          <p className="text-dim" style={{ padding: 12 }}>暂无定时提醒。嘟嘟会在别人让她提醒时自动创建</p>
+        ) : (
+          reminders.map((r, i) => (
+            <div key={i} className="chat-msg user" style={{ marginBottom: 8 }}>
+              <div className="msg-text">{r.content}</div>
+              <div className="msg-meta" style={{ marginTop: 4 }}>
                 发送: {fmtTime(r.at_utc)} · {r.group_id ? `群 ${r.group_id}` : `用户 ${r.user_id}`}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

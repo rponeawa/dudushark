@@ -25,23 +25,26 @@ export default function PausedGroupsPage({ activeQQ }: Props) {
 
   return (
     <div className="main-content">
-      <div className="page-header">
-        <h2>暂停的群聊</h2>
-        <span className="badge">{groups.length} 个</span>
-        <button className="btn-ghost btn-sm" onClick={load} style={{ marginLeft: 12 }}>刷新</button>
-      </div>
-      {loading ? <p className="dim">加载中...</p> : groups.length === 0 ? (
-        <div className="empty-state">暂无被暂停的群聊。管理员发送 /pause 可暂停群消息</div>
-      ) : (
-        <div className="list">
-          {groups.map((g) => (
-            <div key={g} className="list-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span className="list-item-title">群 {g}</span>
+      <div className="panel">
+        <div className="panel-header">
+          <h2>暂停的群聊</h2>
+          <span className="convo-tag private">{groups.length} 个</span>
+          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+        </div>
+        {loading ? <p className="text-dim">加载中...</p> : groups.length === 0 ? (
+          <p className="text-dim" style={{ padding: 12 }}>暂无被暂停的群聊。管理员发送 /pause 可暂停群消息</p>
+        ) : (
+          groups.map((g) => (
+            <div key={g} className="stat-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div>
+                <div className="stat-label">群聊 ID</div>
+                <div className="stat-value" style={{ fontFamily: "SF Mono, Monaco, monospace", fontSize: ".9rem" }}>{g}</div>
+              </div>
               <button className="btn-primary btn-sm" onClick={() => handleResume(g)}>恢复</button>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

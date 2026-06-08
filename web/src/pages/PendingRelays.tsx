@@ -41,29 +41,31 @@ export default function PendingRelaysPage({ activeQQ }: Props) {
 
   return (
     <div className="main-content">
-      <div className="page-header">
-        <h2>待发送代传话</h2>
-        <span className="badge">{pending.length} 条</span>
-        <button className="btn-ghost btn-sm" onClick={load} style={{ marginLeft: 12 }}>刷新</button>
-      </div>
-      {loading ? <p className="dim">加载中...</p> : pending.length === 0 ? (
-        <div className="empty-state">暂无待发送的代传话</div>
-      ) : (
-        <div className="list">
-          {pending.map((r) => (
-            <div key={r.id} className="list-item">
-              <div className="list-item-title">【{r.from_role}】→ 【{r.to_role}】</div>
-              <div style={{ margin: "4px 0" }}>{r.content}</div>
-              <div className="list-item-meta">
+      <div className="panel">
+        <div className="panel-header">
+          <h2>待发送代传话</h2>
+          <span className="convo-tag private">{pending.length} 条</span>
+          <button className="btn-ghost btn-sm" onClick={load}>刷新</button>
+        </div>
+        {loading ? <p className="text-dim">加载中...</p> : pending.length === 0 ? (
+          <p className="text-dim" style={{ padding: 12 }}>暂无待发送的代传话</p>
+        ) : (
+          pending.map((r) => (
+            <div key={r.id} className="mem-item" style={{ marginBottom: 8 }}>
+              <div className="mem-header">
+                <span className="mem-cat">{r.from_role}</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--text-dim)" }}>arrow_forward</span>
+                <span className="mem-cat">{r.to_role}</span>
+              </div>
+              <div className="mem-content" style={{ marginBottom: 8 }}>{r.content}</div>
+              <div className="mem-date" style={{ marginBottom: 8 }}>
                 发送: {fmtTime(r.send_at)} {r.voice ? "· 语音" : ""}
               </div>
-              <div style={{ marginTop: 8 }}>
-                <button className="btn-danger btn-sm" onClick={() => cancelRelay(r.id)}>取消</button>
-              </div>
+              <button className="btn-danger btn-sm" onClick={() => cancelRelay(r.id)}>取消</button>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

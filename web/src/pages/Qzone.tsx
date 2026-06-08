@@ -35,30 +35,30 @@ export default function QzonePage({ activeQQ }: Props) {
 
   return (
     <div className="main-content">
-      <div className="page-header">
-        <h2>QQ 空间说说</h2>
-        <span className="badge">{posts.length} 条</span>
-      </div>
-      <div className="form-group">
-        <label>手动发帖（留空自动生成）</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ flex: 1 }} placeholder="输入说说内容..." value={content}
-            onChange={(e) => setContent(e.target.value)} />
-          <button className="btn-primary" onClick={handlePost}>发帖</button>
+      <div className="panel">
+        <div className="panel-header">
+          <h2>QQ 空间说说</h2>
+          <span className="convo-tag private">{posts.length} 条</span>
         </div>
-      </div>
-      {loading ? <p className="dim">加载中...</p> : posts.length === 0 ? (
-        <div className="empty-state">暂无说说</div>
-      ) : (
-        <div className="list">
-          {posts.map((p, i) => (
-            <div key={i} className="list-item">
-              <div>{p.content}</div>
-              <div className="list-item-meta">{fmtTime(p.created)}</div>
+        <div className="form-group">
+          <label>手动发帖（留空自动生成）</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input style={{ flex: 1 }} placeholder="输入说说内容..." value={content}
+              onChange={(e) => setContent(e.target.value)} />
+            <button className="btn-primary" onClick={handlePost}>发帖</button>
+          </div>
+        </div>
+        {loading ? <p className="text-dim">加载中...</p> : posts.length === 0 ? (
+          <p className="text-dim" style={{ padding: 12 }}>暂无说说</p>
+        ) : (
+          posts.map((p, i) => (
+            <div key={i} className="chat-msg user" style={{ marginBottom: 8 }}>
+              <div className="msg-text">{p.content}</div>
+              <div className="msg-meta" style={{ marginTop: 4 }}>{fmtTime(p.created)}</div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
