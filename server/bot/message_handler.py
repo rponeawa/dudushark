@@ -42,15 +42,17 @@ from server.search.bing import bing_search, format_search_results
 logger = logging.getLogger("dudushark.message")
 
 
-def _do_save_sticker(lib, save_s: dict, bot_qq: str):
-    """后台异步保存表情包（落盘+MD5去重）。"""
+def _do_save_sticker(lib, save_s: dict, bot_qq: str, conv_key: str = "", handler=None):
+    """后台异步保存表情包（落盘+MD5去重）。如果重复则告诉 LLM。"""
     async def _save():
         try:
             r = await lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
             if r:
                 logger.info(f"[{bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
-            else:
-                logger.info(f"[{bot_qq}] Sticker duplicate skipped: {save_s.get('description', '')[:30]}")
+            elif handler and conv_key:
+                # 告诉 LLM 这个已经存过了
+                handler._note_for_llm(conv_key, f"（系统提示：你刚才想存的表情包已经收藏过了，不用重复存。）")
+                logger.info(f"[{bot_qq}] Sticker duplicate, LLM notified: {save_s.get('description', '')[:30]}")
         except Exception as e:
             logger.error(f"[{bot_qq}] Sticker save failed: {e}")
     asyncio.create_task(_save())
@@ -219,6 +221,15 @@ class MessageHandler:
             self._convo_file(key).write_text("\n".join(lines) + "\n", encoding="utf-8")
         except Exception:
             pass
+
+    def _note_for_llm(self, conv_key: str, note: str):
+        """注入一条系统提示到对话历史，下次 LLM 调用可见。"""
+        if conv_key not in self._conversations:
+            self._conversations[conv_key] = []
+        self._conversations[conv_key].append({
+            "role": "system", "content": note, "ts": time.time(),
+        })
+        self._persist_convo(conv_key)
 
     def _load_conversations(self):
         from server.config import get_convo_dir
@@ -904,7 +915,7 @@ class MessageHandler:
                     if save_s and isinstance(save_s, dict) and save_s.get("url"):
                         from server.bot.stickers import get_sticker_library
                         lib = get_sticker_library(self.bot_qq)
-                        _do_save_sticker(lib, save_s, self.bot_qq)
+                        _do_save_sticker(lib, save_s, self.bot_qq, self._conv_key(user_id, group_id), self)
 
                     from server.bot.onebot_handler import onebot_server
                     client = onebot_server.get_client(self.bot_qq)
@@ -1004,7 +1015,7 @@ class MessageHandler:
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
-                _do_save_sticker(lib, save_s, self.bot_qq)
+                _do_save_sticker(lib, save_s, self.bot_qq, self._conv_key(user_id, group_id), self)
             # 发送收藏的表情
             send_s = data.get("send_sticker")
             if send_s and isinstance(send_s, str) and send_s.strip():
