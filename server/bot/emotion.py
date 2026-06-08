@@ -18,7 +18,7 @@ DEFAULT_EMOTIONS = {
     "傲娇": 0.3,
 }
 
-SMOOTH_FACTOR = 0.35  # 每次更新：新值 = 旧值 * (1-factor) + 变化 * factor
+SMOOTH_FACTOR = 0.5  # 每次更新：新值 = 旧值 * (1-factor) + 变化 * factor
 
 
 class DuduEmotion:
