@@ -134,7 +134,7 @@ body, #root { min-height: 100vh; }
 
 .main-content {
   flex: 1; margin-left: 0; overflow-x: hidden;
-  padding: 64px 20px 24px; max-width: 1200px; width: 100%; min-width: 0;
+  padding: 64px 20px 0; max-width: 1200px; width: 100%; min-width: 0;
   transition: margin-left 0.25s ease;
 }
 
@@ -340,7 +340,7 @@ button, .btn {
   .topbar-btn { display: flex; }
   .sidebar-overlay.show { display: block; }
   .sidebar { z-index: 210; }
-  .main-content { padding: 56px 8px 20px; margin-left: 0; }
+  .main-content { padding: 56px 8px 0; margin-left: 0; }
   .panel { padding: 14px; }
   .form-row { flex-direction: column; }
   .instance-grid { grid-template-columns: 1fr; }
@@ -356,7 +356,7 @@ button, .btn {
   html { font-size: 13px; }
   .stat-grid { grid-template-columns: 1fr; }
   .panel { padding: 12px 10px; }
-  .main-content { padding: 48px 6px 20px; }
+  .main-content { padding: 48px 6px 0; }
   .chat-msg { max-width: 96%; }
   .instance-card h3 { font-size: 0.95rem; }
   .mem-header { gap: 6px; }
