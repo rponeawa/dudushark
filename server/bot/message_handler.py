@@ -721,22 +721,28 @@ class MessageHandler:
         except Exception as e:
             err = str(e)
             if "451" in err or "censorship" in err.lower():
-                # 审查拦截：移除最近一条用户消息后重试一次
-                logger.warning(f"[{self.bot_qq}] LLM 451 censorship, removing last user msg and retrying")
+                # 审查拦截：移除最近 3 条用户消息后重试一次
+                logger.warning(f"[{self.bot_qq}] LLM 451 censorship, removing last 3 user msgs and retrying")
                 key = self._conv_key(user_id, group_id)
-                # 从上下文列表中移除最后一条 user 消息
+                removed_count = 0
+                # 从上下文列表中移除最近 3 条 user 消息
                 for i in range(len(messages) - 1, -1, -1):
                     if messages[i].get("role") == "user":
                         removed = messages.pop(i)
+                        removed_count += 1
                         logger.info(f"[{self.bot_qq}] 451 cleanup: removed user msg [{removed.get('content', '')[:60]}]")
-                        break
-                # 从持久化历史中移除最后一条 user 消息
+                        if removed_count >= 3:
+                            break
+                # 从持久化历史中移除最近 3 条 user 消息
                 conv = self._conversations.get(key, [])
+                removed_count = 0
                 for i in range(len(conv) - 1, -1, -1):
                     if conv[i].get("role") == "user":
                         conv.pop(i)
-                        self._persist_convo(key)
-                        break
+                        removed_count += 1
+                        if removed_count >= 3:
+                            break
+                self._persist_convo(key)
                 try:
                     response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
                 except Exception as e2:
