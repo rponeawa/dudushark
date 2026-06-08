@@ -80,7 +80,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 3. 消息类型事件用 `create_task` 调度到后台，不阻塞 WS 接收循环
 4. `message_handler.handle()` 使用 Future 机制合并同用户连续消息
 5. 合并窗口到期后调用 LLM 生成回复，`[SKIP]` 表示不回复
-6. LLM 返回 JSON：`{"reply":"...","quote":bool,"quote_index":null|int,"voice":null|"all"|"last","voice_emotion":null|"...","memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...},"qzone":null|"...","search":"..."}`
+6. LLM 返回 JSON：`{"reply":"...","quote":bool,"quote_index":null|int,"voice":null|"all"|"last","voice_emotion":null|"...","memory":null|{...},"diary":null|{...},"group_memory":null|{...},"forget":null|{...},"remind":null|{...},"relay":null|{...},"qzone":null|"...","search":"...","emotion":null|"开心","save_sticker":null|{...},"send_sticker":null|"..."}`
 7. `voice` 非 null 时：发送语音（StepFun TTS step-tts-2），`voice_emotion` 控制情绪
 8. 长回复按 `。！？\n～` 断句拆分发送，不限段数，间隔 `max(2.0, len*0.08+1.0)`
 9. `[SKIP]` 不回复，LLM 调用失败返回 `[]` 不回复
@@ -142,16 +142,16 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 
 **情绪系统：**
-- `DuduEmotion` 单例，独立于心情/睡眠。跟踪 8 种情绪（开心/生气/难过/兴奋/撒娇/平静/困惑/傲娇）
-- LLM 输出 `emotion` JSON 字段表达情绪变化（正增负减），每次回复平滑更新（factor=0.35）
-- 情绪平稳时 LLM 不输出该字段。当前情绪注入 system prompt
-- 前端状态页显示各情绪百分比
+- `DuduEmotion` 单例，独立于心情/睡眠。一次只有一种情绪 + 百分比（如"生气 60%"）
+- LLM 输出 `emotion` 字段（如 `"生气"`），系统管理强度和平滑过渡（~2 tick 完成切换）
+- 自然衰减：每次 tick 向 30% 基线靠拢。情绪不变时 LLM 不输出
+- 注入 system prompt，前端状态页显示情绪+进度条
 
 **表情包收藏：**
-- `StickerLibrary` 管理收藏的表情包，URL 去重
-- LLM 通过 `save_sticker` 字段收藏喜欢的表情包（含描述+标签），`send_sticker` 搜索并发送
-- 已有收藏列表注入 prompt 避免重复收藏
-- 前端表情包 tab 可浏览、删除收藏
+- `StickerLibrary` 管理收藏的表情包，图片下载落盘（QQ URL 会过期）
+- LLM 通过 `save_sticker` 收藏（含描述+标签），`send_sticker` 向量搜索后发 CQ base64 图片
+- 向量搜索（ChromaDB）+ 相似度阈值 0.4。URL 去重 + 已收藏列表注入 prompt
+- 图片代理端点 `/api/sticker-image` 免登录，前端表情包 tab 可浏览/删除
 
 **主动消息 + 提醒：**
 - 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话（默认 0.15 × 精力）
@@ -188,9 +188,9 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - relay: `{"to_role":"角色名","content":"转达内容","voice":null|"last"|"all","voice_emotion":null|"...","delay_minutes":1}` — 管理员间代传话。延迟按传话者要求，未指定默认1分钟。WebUI 可查看/取消 pending
 - qzone: 字符串，QQ 空间说说内容。仅管理员消息且含关键词时字段可见，主 LLM 自行判断是否填
 - search: `"search":"关键词"` — LLM 请求网络搜索，与 reply 同时输出，系统异步执行搜索+二次 LLM
-- emotion: `{"开心":0.1,"生气":-0.2}` — 情绪变化，正增负减。情绪平稳不输出
-- save_sticker: `{"url":"...","description":"...","tags":[]}` — 收藏喜欢的表情包，URL 自动去重
-- send_sticker: 搜索关键词 → 发收藏的表情。偶尔用，不总发
+- emotion: `"生气"` — 当前情绪（8 选 1），变了才填。系统自动管理强度和平滑过渡
+- save_sticker: `{"url":"...","description":"...","tags":[]}` — 收藏表情包，图片下载落盘，URL 去重
+- send_sticker: 搜索关键词 → 向量匹配 → 发 CQ base64 图片。低于阈值不发
 
 **角色/管理员系统：**
 - `BotConfig.admins` 列表，运行时 QQ 匹配 → 用户名后标注【角色】标签
@@ -223,11 +223,12 @@ data/instances/{qq}/
   ├── qzone_state.json
   ├── pending_relays.json
   ├── emotion_state.json
-  └── stickers.json
+  ├── stickers.json
+  └── stickers/           (表情包图片落盘)
 ```
 
 ## API 路由
 
 所有 API 前缀 `/api`，WebSocket `/api/ws/widget`。除 `/api/auth/login` 和 `/api/ws/widget` 外均需 Bearer token 鉴权。
 
-关键端点：`/auth/login`、`/status`、`/instances` CRUD、`/instances/{qq}/config`、`/instances/{qq}/memories/{user_id}`、`/instances/{qq}/conversations/{key}`、`/instances/{qq}/reminders`、`/instances/{qq}/qzone/posts`、`/instances/{qq}/paused_groups`。
+关键端点：`/auth/login`、`/status`、`/instances` CRUD、`/instances/{qq}/config`、`/instances/{qq}/memories/{user_id}`、`/instances/{qq}/conversations/{key}`、`/instances/{qq}/reminders`、`/instances/{qq}/qzone/posts`、`/instances/{qq}/paused_groups`、`/instances/{qq}/stickers`、`/instances/{qq}/pending_relays`、`/instances/{qq}/backup`、`/sticker-image`。
