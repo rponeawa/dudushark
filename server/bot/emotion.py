@@ -48,7 +48,8 @@ class DuduEmotion:
         p.write_text(json.dumps({"values": self.values}, ensure_ascii=False, indent=2))
 
     def update(self, changes: dict[str, float]):
-        """Apply emotion changes. Positive=increase, negative=decrease."""
+        """Apply emotion changes. Positive=increase, negative=decrease.
+        Emotions not mentioned in changes naturally decay toward 0 by a tiny amount."""
         for name, delta in changes.items():
             if name not in self.values:
                 continue
@@ -57,6 +58,10 @@ class DuduEmotion:
             self.values[name] = max(0.0, min(1.0,
                 self.values[name] * (1 - SMOOTH_FACTOR) + target * SMOOTH_FACTOR
             ))
+        # Natural decay: unmentioned emotions drift toward 0 at 2% per update
+        for name in self.values:
+            if name not in changes:
+                self.values[name] = max(0.0, self.values[name] * 0.98)
         self._save()
 
     def dominant(self) -> str:
