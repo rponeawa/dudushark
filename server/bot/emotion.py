@@ -18,6 +18,7 @@ class DuduEmotion:
         self.current = "平静"
         self.intensity = 0.3
         self._from_intensity: float = 0.3
+        self._target: str | None = None
         self._progress: float = 1.0  # 1.0 = no transition
         self._load()
 
@@ -43,27 +44,37 @@ class DuduEmotion:
         }, ensure_ascii=False, indent=2))
 
     def set_emotion(self, name: str | None):
-        """LLM outputs an emotion name. Start transition from current → new."""
+        """LLM outputs an emotion name. Begin smooth transition from current → new."""
         if not name or name not in EMOTIONS or name == self.current:
             return
         self._from_intensity = self.intensity
-        self.current = name
-        self.intensity = DEFAULT_INTENSITY
+        self._target = name
         self._progress = 0.0
 
     def tick(self):
-        """Advance transition and apply natural drift toward 平静."""
+        """Advance transition and apply natural drift."""
         if self._progress < 1.0:
             self._progress += TRANSITION_SPEED
             if self._progress >= 1.0:
+                # Transition complete
+                self.current = self._target
+                self.intensity = max(0.3, self._from_intensity * 0.7)
+                self._target = None
                 self._progress = 1.0
-        # Natural drift: intensity slowly moves toward 0.3 (baseline)
-        self.intensity += (0.3 - self.intensity) * 0.05
+            else:
+                # Smooth blend: old fades, new intensity rises
+                t = self._progress
+                self.intensity = self._from_intensity * (1 - t) + DEFAULT_INTENSITY * t
+        else:
+            # Natural drift toward baseline
+            self.intensity += (0.3 - self.intensity) * 0.03
         self.intensity = max(0.05, min(1.0, self.intensity))
         self._save()
 
     def context(self) -> str:
         pct = round(self.intensity * 100)
+        if self._progress < 0.6 and hasattr(self, '_target') and self._target:
+            return f"当前情绪: {self.current}→{self._target} ({pct}%)"
         return f"当前情绪: {self.current} ({pct}%)"
 
     def state_dict(self) -> dict:
