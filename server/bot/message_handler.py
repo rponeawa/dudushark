@@ -409,6 +409,14 @@ class MessageHandler:
         msg_ids = buf.get("msg_ids", [])
         all_images = buf.get("all_images", [])
         all_image_infos = buf.get("all_image_infos", [])
+        # 清空 buffer 中已处理的数据，防止后续 flush 重复发送
+        buf["texts"] = []
+        buf["names"] = []
+        buf["user_ids"] = []
+        buf["msg_ids"] = []
+        buf["all_images"] = []
+        buf["all_image_infos"] = []
+        buf["first_ts"] = time.time()
         logger.info(f"[flush@{buf_key}] {len(texts)}条: {list(zip(names, texts))}")
         combined = "\n".join(f"{n}: {t}" for n, t in zip(names, texts)) if len(texts) > 1 else texts[0]
         # 合并消息用序号标注，让 LLM 知道每条消息的索引
