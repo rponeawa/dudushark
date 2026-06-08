@@ -1033,9 +1033,24 @@ class MessageHandler:
                     logger.info(f"[{self.bot_qq}] Sticker path: {path}, exists: {path.exists() if path else 'N/A'}")
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
-                        logger.info(f"[{self.bot_qq}] Sticker base64: {len(b64)} chars, adding to result")
-                        result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
-                        logger.info(f"[{self.bot_qq}] Sticker appended to result, now {len(result)} parts")
+                        logger.info(f"[{self.bot_qq}] Sticker base64: {len(b64)} chars, scheduling send")
+                        # 不通过 result 发送（避免复杂的 result 生命周期问题），直接用 OneBot 发送
+                        _b64_val = b64
+                        _target = user_id
+                        _is_group = is_group
+                        _group_id = group_id
+                        _bot = self.bot_qq
+                        async def _send_sticker():
+                            await asyncio.sleep(0.5)
+                            from server.bot.onebot_handler import onebot_server
+                            client = onebot_server.get_client(_bot)
+                            if client and client.connected:
+                                if _is_group:
+                                    await client.send_group_msg(_group_id, f"[CQ:image,file=base64://{_b64_val}]")
+                                else:
+                                    await client.send_private_msg(_target, f"[CQ:image,file=base64://{_b64_val}]")
+                                logger.info(f"[{_bot}] Sticker sent via OneBot")
+                        asyncio.create_task(_send_sticker())
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
                 else:
