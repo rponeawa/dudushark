@@ -754,7 +754,7 @@ class MessageHandler:
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": "搜索互联网获取实时信息，如新闻、天气、最新事件等。只在确实需要查资料时才调用。",
+                    "description": "搜索互联网获取实时信息。只在确实需要查资料时才调用。发自己收藏的表情包用send_sticker字段，不要搜。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -848,7 +848,7 @@ class MessageHandler:
                         try:
                             results = await bing_search(sq)
                             if results:
-                                messages.append({"role": "system", "content": "## 网络搜索结果\n" + format_search_results(results) + "\n\n根据以上搜索结果回答问题，用鱼自己的话转述，不要直接贴原文。最终输出JSON格式回复（包含reply和memory字段）。"})
+                                messages.append({"role": "system", "content": "## 网络搜索结果\n" + format_search_results(results) + "\n\n根据以上搜索结果回答问题，用鱼自己的话转述，不要直接贴原文。最终输出JSON格式回复（包含reply、memory、emotion、send_sticker字段）。如果有合适的表情包收藏，优先发送收藏的而不是在网上找。"})
                             else:
                                 messages.append({"role": "system", "content": f"搜索\"{sq}\"没找到结果，根据已有知识回答。"})
                         except Exception:
