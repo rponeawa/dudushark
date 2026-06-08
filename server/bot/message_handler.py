@@ -1035,10 +1035,12 @@ class MessageHandler:
                         b64 = _b64.b64encode(path.read_bytes()).decode()
                         logger.info(f"[{self.bot_qq}] Sticker base64: {len(b64)} chars, adding to result")
                         result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
+                        logger.info(f"[{self.bot_qq}] Sticker appended to result, now {len(result)} parts")
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
                 else:
                     logger.info(f"[{self.bot_qq}] No sticker match for: {send_s.strip()}")
+            logger.info(f"[{self.bot_qq}] End of if data block, result={len(result)}")
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
