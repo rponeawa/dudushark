@@ -65,7 +65,7 @@ class StickerLibrary:
                 if r.status_code == 200:
                     fpath.write_bytes(r.content)
         except Exception:
-            fname = ""  # 下载失败不存文件，但记录仍保留
+            fname = ""
 
         entry = {
             "id": sid, "url": url, "file": fname,
@@ -74,10 +74,13 @@ class StickerLibrary:
         }
         self.stickers.append(entry)
         self._save()
+        # 后台写入向量索引（不阻塞）
         try:
+            import asyncio
             vs = self._get_vs()
             text = f"{description} {' '.join(tags or [])}"
-            vs.add(str(sid), text, {"id": sid})
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, vs.add, str(sid), text, {"id": sid})
         except Exception:
             pass
         return entry
@@ -101,7 +104,8 @@ class StickerLibrary:
             lines.append(f"  [{s['id']}] {s['description']} — {', '.join(s.get('tags',[]))}")
         return "\n".join(lines)
 
-    def search(self, query: str, n: int = 5, min_score: float = 0.4) -> list[dict]:
+    def _search_sync(self, query: str, n: int, min_score: float) -> list[dict]:
+        """同步向量搜索（在线程池中运行）。"""
         if not query or not self.stickers:
             return []
         results = []
@@ -127,6 +131,15 @@ class StickerLibrary:
         except Exception:
             pass
         return results
+
+    async def search(self, query: str, n: int = 5, min_score: float = 0.4) -> list[dict]:
+        """异步向量搜索（在线程池中运行，不阻塞事件循环）。"""
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return self._search_sync(query, n, min_score)
+        return await loop.run_in_executor(None, self._search_sync, query, n, min_score)
 
     def get_path(self, sticker_id: int) -> Path | None:
         for s in self.stickers:

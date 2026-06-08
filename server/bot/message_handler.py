@@ -1005,25 +1005,19 @@ class MessageHandler:
             # 发送收藏的表情
             send_s = data.get("send_sticker")
             if send_s and isinstance(send_s, str) and send_s.strip():
-                # 关键字即时搜索（不阻塞），向量搜索仅在保存新贴纸时使用
                 import base64 as _b64
-                _q = send_s.strip().lower()
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
-                match = None
-                for s in lib.stickers:
-                    desc = s.get("description", "").lower()
-                    if _q in desc or any(_q in t.lower() for t in s.get("tags", [])):
-                        match = s
-                        break
-                if match:
-                    lib.mark_used(match["id"])
-                    path = lib.get_path(match["id"])
+                matches = await lib.search(send_s.strip(), n=1)
+                if matches:
+                    s = matches[0]
+                    lib.mark_used(s["id"])
+                    path = lib.get_path(s["id"])
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
                         result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
                     else:
-                        logger.warning(f"[{self.bot_qq}] Sticker file missing: {match['id']}")
+                        logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
