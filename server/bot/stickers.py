@@ -50,31 +50,39 @@ class StickerLibrary:
         p.write_text(json.dumps(self.stickers, ensure_ascii=False, indent=2))
 
     async def add(self, url: str, description: str, tags: list[str] | None = None) -> dict | None:
-        """Download and save sticker locally. Deduplicates by URL. Async."""
+        """Download and save sticker locally. Deduplicates by MD5 of image content. Async."""
+        import hashlib, httpx
+        # 快速 URL 去重
         for s in self.stickers:
             if s.get("url") == url:
                 return None
         sid = len(self.stickers) + 1
-        # 下载图片落盘
         fname = f"{sid}_{int(time.time())}.gif"
         fpath = _sticker_dir(self.bot_qq) / fname
+        md5 = ""
         try:
-            import httpx
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
                 r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 if r.status_code == 200:
-                    fpath.write_bytes(r.content)
+                    data = r.content
+                    fpath.write_bytes(data)
+                    md5 = hashlib.md5(data).hexdigest()
         except Exception:
             fname = ""
-
+        # MD5 去重：相同内容不重复存（URL 可能不同）
+        if md5:
+            for s in self.stickers:
+                if s.get("md5") == md5:
+                    if fname:
+                        fpath.unlink()
+                    return None
         entry = {
-            "id": sid, "url": url, "file": fname,
+            "id": sid, "url": url, "file": fname, "md5": md5,
             "description": description, "tags": tags or [],
             "saved_at": time.time(), "used_count": 0,
         }
         self.stickers.append(entry)
         self._save()
-        # 后台写入向量索引（不阻塞）
         try:
             import asyncio
             vs = self._get_vs()

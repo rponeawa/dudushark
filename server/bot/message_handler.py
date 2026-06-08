@@ -43,11 +43,14 @@ logger = logging.getLogger("dudushark.message")
 
 
 def _do_save_sticker(lib, save_s: dict, bot_qq: str):
-    """后台异步保存表情包（落盘+向量索引）。"""
+    """后台异步保存表情包（落盘+MD5去重）。"""
     async def _save():
         try:
             r = await lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
-            if r: logger.info(f"[{bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
+            if r:
+                logger.info(f"[{bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
+            else:
+                logger.info(f"[{bot_qq}] Sticker duplicate skipped: {save_s.get('description', '')[:30]}")
         except Exception as e:
             logger.error(f"[{bot_qq}] Sticker save failed: {e}")
     asyncio.create_task(_save())
