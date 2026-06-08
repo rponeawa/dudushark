@@ -70,6 +70,9 @@ class DuduMood:
         """Returns a paragraph describing current mood to inject into system prompt."""
         parts = []
 
+        # 作息说明
+        parts.append("你的作息：每天21:00开始犯困，23:00到早上8:00是睡觉时间。")
+
         hour = self._hour()
         for (lo, hi), text in _HOURLY_FLAVOR.items():
             if lo <= hour < hi:
@@ -80,8 +83,10 @@ class DuduMood:
         if flavor:
             parts.append(flavor)
 
-        # 注入精力值，让 LLM 感知自己的状态
-        parts.append(f"当前精力: {round(self.energy * 100)}%")
+        # 当前状态 + 精力值
+        state_labels = {"awake": "清醒", "sleepy": "犯困", "just_woke": "刚睡醒", "sleeping": "睡着了"}
+        state_cn = state_labels.get(self.sleep_state, self.sleep_state)
+        parts.append(f"当前状态: {state_cn}，精力: {round(self.energy * 100)}%")
 
         return "\n".join(parts)
 
