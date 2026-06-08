@@ -360,9 +360,9 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
 
 # ---- 表情包收藏 ----
 
-@router.get("/sticker-image")
+@router.get("/sticker-image", include_in_schema=False)
 async def sticker_image(qq: str, id: int):
-    """代理表情包图片，绕过 QQ 图片的跨域/鉴权限制。"""
+    """代理表情包图片，绕过 QQ 图片的跨域/鉴权限制。无需登录。"""
     lib = get_sticker_library(qq)
     for s in lib.stickers:
         if s["id"] == id:

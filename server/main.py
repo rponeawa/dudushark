@@ -46,7 +46,7 @@ app = FastAPI(title="嘟嘟鲨鱼 DuduShark", version="1.0.0", lifespan=lifespan
 app.include_router(webui_router)
 
 # Auth middleware — protects /api/* except login and websocket
-_AUTH_WHITELIST = {"/api/auth/login", "/api/ws/widget"}
+_AUTH_WHITELIST = {"/api/auth/login", "/api/ws/widget", "/api/sticker-image"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
