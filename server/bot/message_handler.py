@@ -1030,23 +1030,9 @@ class MessageHandler:
                     path = lib.get_path(s["id"])
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
-                        # 独立发送表情包，不走 result 管道
-                        _b64_val = b64
-                        _target = user_id
-                        _is_group = is_group
-                        _group_id = group_id
-                        _bot = self.bot_qq
-                        async def _send_sticker():
-                            await asyncio.sleep(0.5)
-                            from server.bot.onebot_handler import onebot_server
-                            client = onebot_server.get_client(_bot)
-                            if client and client.connected:
-                                if _is_group:
-                                    await client.send_group_msg(_group_id, f"[CQ:image,file=base64://{_b64_val}]")
-                                else:
-                                    await client.send_private_msg(_target, f"[CQ:image,file=base64://{_b64_val}]")
-                                logger.info(f"[{_bot}] Sticker sent")
-                        asyncio.create_task(_send_sticker())
+                        # 表情包放在 result 末尾，在所有文字/语音之后发送
+                        result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
+                        logger.info(f"[{self.bot_qq}] Sticker queued for send")
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
                 else:
