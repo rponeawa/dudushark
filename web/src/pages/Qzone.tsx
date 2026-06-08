@@ -34,7 +34,7 @@ export default function QzonePage({ activeQQ }: Props) {
   if (!activeQQ) return <div className="empty-state">请先选择实例</div>;
 
   return (
-    <div className="main-content">
+    <div>
       <div className="panel">
         <div className="panel-header">
           <h2>QQ 空间说说</h2>

@@ -25,7 +25,7 @@ export default function Stickers({ activeQQ }: Props) {
   if (!activeQQ) return <div className="empty-state">请先选择实例</div>;
 
   return (
-    <div className="main-content">
+    <div>
       <div className="panel">
         <div className="panel-header">
           <h2>表情包收藏</h2>

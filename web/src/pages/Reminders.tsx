@@ -23,7 +23,7 @@ export default function RemindersPage({ activeQQ }: Props) {
   if (!activeQQ) return <div className="empty-state">请先选择实例</div>;
 
   return (
-    <div className="main-content">
+    <div>
       <div className="panel">
         <div className="panel-header">
           <h2>定时提醒</h2>

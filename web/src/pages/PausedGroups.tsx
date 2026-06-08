@@ -24,7 +24,7 @@ export default function PausedGroupsPage({ activeQQ }: Props) {
   if (!activeQQ) return <div className="empty-state">请先选择实例</div>;
 
   return (
-    <div className="main-content">
+    <div>
       <div className="panel">
         <div className="panel-header">
           <h2>暂停的群聊</h2>

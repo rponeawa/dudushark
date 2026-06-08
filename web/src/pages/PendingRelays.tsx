@@ -40,7 +40,7 @@ export default function PendingRelaysPage({ activeQQ }: Props) {
   const pending = relays.filter((r) => !r.sent);
 
   return (
-    <div className="main-content">
+    <div>
       <div className="panel">
         <div className="panel-header">
           <h2>待发送代传话</h2>
