@@ -1,30 +1,24 @@
 """
-DuduShark emotion system — separate from sleep/energy mood.
-Tracks emotional state with smooth transitions, injected into prompts.
+DuduShark emotion system — single dominant emotion with intensity.
+LLM outputs emotion name, system manages smooth transitions.
 """
 
 import json
-import time
 from pathlib import Path
 
-DEFAULT_EMOTIONS = {
-    "开心": 0.3,
-    "生气": 0.0,
-    "难过": 0.0,
-    "兴奋": 0.2,
-    "撒娇": 0.2,
-    "平静": 0.5,
-    "困惑": 0.0,
-    "傲娇": 0.3,
-}
+EMOTIONS = ["开心", "生气", "难过", "兴奋", "撒娇", "平静", "困惑", "傲娇"]
 
-SMOOTH_FACTOR = 0.5  # 每次更新：新值 = 旧值 * (1-factor) + 变化 * factor
+TRANSITION_SPEED = 0.65   # 每次 tick 过渡进度，约 2 次完成
+DEFAULT_INTENSITY = 0.6   # 新情绪的默认强度
 
 
 class DuduEmotion:
     def __init__(self, bot_qq: str):
         self.bot_qq = bot_qq
-        self.values: dict[str, float] = dict(DEFAULT_EMOTIONS)
+        self.current = "平静"
+        self.intensity = 0.3
+        self._from_intensity: float = 0.3
+        self._progress: float = 1.0  # 1.0 = no transition
         self._load()
 
     def _path(self) -> Path:
@@ -36,57 +30,46 @@ class DuduEmotion:
         if p.exists():
             try:
                 saved = json.loads(p.read_text(encoding="utf-8"))
-                for k, v in saved.get("values", {}).items():
-                    if k in DEFAULT_EMOTIONS:
-                        self.values[k] = max(0.0, min(1.0, float(v)))
+                self.current = saved.get("current", "平静")
+                self.intensity = max(0.0, min(1.0, float(saved.get("intensity", 0.3))))
             except Exception:
                 pass
 
     def _save(self):
         p = self._path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"values": self.values}, ensure_ascii=False, indent=2))
+        p.write_text(json.dumps({
+            "current": self.current, "intensity": round(self.intensity, 3),
+        }, ensure_ascii=False, indent=2))
 
-    def update(self, changes: dict[str, float]):
-        """Apply emotion changes. Positive=increase, negative=decrease.
-        Emotions not mentioned in changes naturally decay toward 0 by a tiny amount."""
-        for name, delta in changes.items():
-            if name not in self.values:
-                continue
-            delta = max(-1.0, min(1.0, float(delta)))
-            target = max(0.0, min(1.0, self.values[name] + delta))
-            self.values[name] = max(0.0, min(1.0,
-                self.values[name] * (1 - SMOOTH_FACTOR) + target * SMOOTH_FACTOR
-            ))
-        # Natural decay: unmentioned emotions drift toward 0 at 2% per update
-        for name in self.values:
-            if name not in changes:
-                self.values[name] = max(0.0, self.values[name] * 0.98)
+    def set_emotion(self, name: str | None):
+        """LLM outputs an emotion name. Start transition from current → new."""
+        if not name or name not in EMOTIONS or name == self.current:
+            return
+        self._from_intensity = self.intensity
+        self.current = name
+        self.intensity = DEFAULT_INTENSITY
+        self._progress = 0.0
+
+    def tick(self):
+        """Advance transition and apply natural drift toward 平静."""
+        if self._progress < 1.0:
+            self._progress += TRANSITION_SPEED
+            if self._progress >= 1.0:
+                self._progress = 1.0
+        # Natural drift: intensity slowly moves toward 0.3 (baseline)
+        self.intensity += (0.3 - self.intensity) * 0.05
+        self.intensity = max(0.05, min(1.0, self.intensity))
         self._save()
 
-    def dominant(self) -> str:
-        """Return the most intense emotion name."""
-        if not self.values:
-            return "平静"
-        return max(self.values, key=lambda k: self.values[k])
-
     def context(self) -> str:
-        """Return a paragraph for system prompt injection."""
-        parts = []
-        active = [(k, v) for k, v in self.values.items() if v > 0.15]
-        active.sort(key=lambda x: -x[1])
-        if not active:
-            return "当前情绪: 平静 (100%)"
-        lines = [f"当前情绪:"]
-        for name, val in active[:4]:
-            pct = round(val * 100)
-            lines.append(f"  {name}: {pct}%")
-        return "\n".join(lines)
+        pct = round(self.intensity * 100)
+        return f"当前情绪: {self.current} ({pct}%)"
 
     def state_dict(self) -> dict:
         return {
-            "values": {k: round(v, 3) for k, v in self.values.items()},
-            "dominant": self.dominant(),
+            "current": self.current,
+            "intensity": round(self.intensity, 3),
         }
 
 

@@ -495,7 +495,7 @@ class MessageHandler:
             json_prompt += "\n- group_memory: 群整体的事（里程碑、群活动、群氛围）。格式必须为: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本"
         json_prompt += (
             "\n- diary: 鱼的日记。今天有意思的事、心情变化、值得记住的瞬间——挑有感觉的写，不用什么都记。格式同memory。相同category+title会更新。"
-            "- emotion: 你的情绪变化。格式: {\"开心\":0.1,\"生气\":-0.2,...}，正数增加负数减少。可选字段：开心/生气/难过/兴奋/撒娇/平静/困惑/傲娇。情绪变了才填，没变留null。\n"
+            "- emotion: 你当前的情绪（只能有一种）。可选：开心/生气/难过/兴奋/撒娇/平静/困惑/傲娇。变了才填，没变留null。\n"
             "- save_sticker: 收藏对方发的表情包。只收藏你感兴趣的——鲨鱼相关、软萌可爱、傲娇撒娇、啊呜风格。看不懂的、奇怪的、无感的都不要存。格式: {\"url\":\"图片URL\",\"description\":\"描述\",\"tags\":[\"标签\"]}，不喜欢就null。\n"
             "- send_sticker: 发收藏的表情。填描述关键词来搜索匹配的表情，偶尔用，不要每次都发。null=不发。\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
@@ -522,6 +522,7 @@ class MessageHandler:
 
         from server.bot.emotion import get_emotion
         emotion = get_emotion(self.bot_qq)
+        emotion.tick()
         emotion_ctx = emotion.context()
         messages.append({"role": "system", "content": emotion_ctx})
 
@@ -878,10 +879,10 @@ class MessageHandler:
                     if relay_final and isinstance(relay_final, dict) and is_sender_admin:
                         if await self._should_relay(text):
                             asyncio.create_task(self._relay_message(relay_final, user_id))
-                    emo_changes = final_data.get("emotion")
-                    if emo_changes and isinstance(emo_changes, dict):
+                    emo = final_data.get("emotion")
+                    if emo and isinstance(emo, str):
                         from server.bot.emotion import get_emotion
-                        get_emotion(self.bot_qq).update(emo_changes)
+                        get_emotion(self.bot_qq).set_emotion(emo)
                     save_s = final_data.get("save_sticker")
                     if save_s and isinstance(save_s, dict) and save_s.get("url"):
                         from server.bot.stickers import get_sticker_library
@@ -978,10 +979,10 @@ class MessageHandler:
                 _qzone_content = _qzone_content.strip().strip('"')[:500]
                 if _qzone_content and await self._should_post_qzone(_qzone_content, text, user_id, group_id):
                     asyncio.create_task(self._post_qzone(_qzone_content, user_id, group_id))
-            emo_changes = data.get("emotion")
-            if emo_changes and isinstance(emo_changes, dict):
+            emo = data.get("emotion")
+            if emo and isinstance(emo, str):
                 from server.bot.emotion import get_emotion
-                get_emotion(self.bot_qq).update(emo_changes)
+                get_emotion(self.bot_qq).set_emotion(emo)
             # 收藏表情包
             save_s = data.get("save_sticker")
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
