@@ -75,7 +75,7 @@ class MemoryManager:
                     filepath.write_text(updated, encoding="utf-8")
                     try:
                         vs = self._get_vs(user_id)
-                        vs.add(entry_id, updated, {"category": category, "title": title, "date": now})
+                        vs.add(entry_id, updated, {"category": category, "title": title, "date": now, "user": user_id})
                     except Exception:
                         pass
                     return False
@@ -87,7 +87,7 @@ class MemoryManager:
 
         try:
             vs = self._get_vs(user_id)
-            vs.add(entry_id, full_text, {"category": category, "title": title, "date": now})
+            vs.add(entry_id, full_text, {"category": category, "title": title, "date": now, "user": user_id})
         except Exception:
             pass
         return is_new

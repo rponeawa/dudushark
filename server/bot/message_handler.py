@@ -446,7 +446,7 @@ class MessageHandler:
         is_group = bool(group_id)
 
         # 检索记忆（对人的 + 全局记忆）
-        def _fmt_memories(mems: list[dict]) -> str:
+        def _fmt_memories(mems: list[dict], show_user: bool = False) -> str:
             lines = []
             for m in mems:
                 date = m.get("meta", {}).get("date", "未知")
@@ -457,7 +457,9 @@ class MessageHandler:
                         date = f"{parts[1]}-{parts[2]} {t.split(':')[0]}:{t.split(':')[1]}"
                 except Exception:
                     pass
-                lines.append(f"- [{date}] {m['text'][:400]}")
+                owner = m.get("meta", {}).get("user", "")
+                label = f"[{owner}] " if show_user and owner else ""
+                lines.append(f"- {label}[{date}] {m['text'][:400]}")
             return "\n".join(lines)
 
         # 个人记忆检索：群聊合并消息时检索所有说话人的记忆
@@ -475,7 +477,7 @@ class MessageHandler:
             personal_memories = personal_memories[:self.cfg.memory_retrieval_count]
         else:
             personal_memories = self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
-        memories_text = _fmt_memories(personal_memories)
+        memories_text = _fmt_memories(personal_memories, show_user=is_group)
         diary_text = _fmt_memories(
             self.memory.recall_by_vector("__diary__", text, n=4)
         )
