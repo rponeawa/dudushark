@@ -1501,6 +1501,11 @@ class MessageHandler:
             posts.insert(0, {"content": content, "created": time.time()})
             path.write_text(json.dumps(posts[:200], ensure_ascii=False, indent=2))
             logger.info(f"[{self.bot_qq}] Qzone posted via main LLM: {content[:50]}")
+            # 把说说内容存进全局记忆，打上标签避免下次生成时引用
+            import datetime as _dt
+            from server.memory.manager import _CN_TZ
+            today = _dt.datetime.now(_CN_TZ).strftime("%Y-%m-%d")
+            self.memory.remember("__diary__", "空间说说", f"{today} 说说", content)
             # 发成功确认
             if _client and _client.connected:
                 _done = f"发好啦～鱼写了「{content[:30]}{'...' if len(content)>30 else ''}」啊呜～"

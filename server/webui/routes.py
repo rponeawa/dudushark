@@ -344,6 +344,11 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         posts.insert(0, {"content": content, "created": time.time()})
         posts = posts[:200]
         path.write_text(json.dumps(posts, ensure_ascii=False, indent=2))
+        # 存进全局记忆，打标签避免下次生成时引用
+        import datetime as _dt
+        from server.memory.manager import _CN_TZ
+        today = _dt.datetime.now(_CN_TZ).strftime("%Y-%m-%d")
+        get_memory_manager(qq).remember("__diary__", "空间说说", f"{today} 说说", content)
         logger.info(f"[{qq}] WebUI manual Qzone post: {content[:50]}")
         return {"ok": True, "content": content}
     else:

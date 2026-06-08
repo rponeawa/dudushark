@@ -301,6 +301,8 @@ class ProactiveScheduler:
 
         handler = get_message_handler(self.bot_qq)
         today_diary = handler.memory.recall_by_date("__diary__", self._today_str())
+        # 过滤掉之前发过的说说，避免重复引用
+        today_diary = [d for d in today_diary if "类型: 空间说说" not in d.get("text", "")]
 
         if today_diary:
             diary_text = "\n".join(f"- {d['text'][:200]}" for d in today_diary[:5])
@@ -369,6 +371,11 @@ class ProactiveScheduler:
         if ok:
             await self._save_qzone_post(content)
             self._mark_qzone_posted()
+            # 存进全局记忆，打标签避免下次生成时引用
+            import datetime as _dt
+            from server.memory.manager import _CN_TZ
+            today = _dt.datetime.now(_CN_TZ).strftime("%Y-%m-%d")
+            handler.memory.remember("__diary__", "空间说说", f"{today} 说说", content)
             logger.info(f"[{self.bot_qq}] Qzone auto-posted: {content[:50]}")
         else:
             logger.warning(f"[{self.bot_qq}] Qzone auto-post failed ({msg}), will retry next cycle")
