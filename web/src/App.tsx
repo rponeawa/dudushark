@@ -6,6 +6,10 @@ import Conversations from "./pages/Conversations";
 import Memories from "./pages/Memories";
 import Settings from "./pages/Settings";
 import Stickers from "./pages/Stickers";
+import RemindersPage from "./pages/Reminders";
+import PendingRelaysPage from "./pages/PendingRelays";
+import QzonePage from "./pages/Qzone";
+import PausedGroupsPage from "./pages/PausedGroups";
 import { listInstances, InstanceInfo, login, setToken, getToken } from "./api";
 
 type Tab = { label: string; path: string; icon: string };
@@ -15,6 +19,10 @@ const TABS: Tab[] = [
   { label: "实例", path: "/instances", icon: "dns" },
   { label: "对话", path: "/conversations", icon: "chat" },
   { label: "记忆", path: "/memories", icon: "psychology" },
+  { label: "提醒", path: "/reminders", icon: "notifications" },
+  { label: "传话", path: "/relays", icon: "forward" },
+  { label: "空间", path: "/qzone", icon: "public" },
+  { label: "暂停", path: "/paused", icon: "pause_circle" },
   { label: "表情包", path: "/stickers", icon: "gif_box" },
   { label: "设置", path: "/settings", icon: "settings" },
 ];
@@ -173,10 +181,11 @@ export default function App() {
             path="/memories"
             element={<Memories instances={instances} activeQQ={activeQQ} setActiveQQ={setActiveQQ} />}
           />
-          <Route
-            path="/stickers"
-            element={<Stickers activeQQ={activeQQ} />}
-          />
+          <Route path="/reminders" element={<RemindersPage activeQQ={activeQQ} />} />
+          <Route path="/relays" element={<PendingRelaysPage activeQQ={activeQQ} />} />
+          <Route path="/qzone" element={<QzonePage activeQQ={activeQQ} />} />
+          <Route path="/paused" element={<PausedGroupsPage activeQQ={activeQQ} />} />
+          <Route path="/stickers" element={<Stickers activeQQ={activeQQ} />} />
           <Route
             path="/settings"
             element={<Settings instances={instances} activeQQ={activeQQ} setActiveQQ={setActiveQQ} />}
