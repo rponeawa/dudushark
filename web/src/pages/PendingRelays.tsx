@@ -1,26 +1,21 @@
 import { useState, useEffect } from "react";
 
-interface PendingRelay {
-  id: string; from_role: string; to_role: string; content: string;
-  voice: string | null; send_at: number; created_at: number;
-}
-
-interface Props { activeQQ: string; token?: string; }
+interface Props { activeQQ: string; }
 
 function fmtTime(ts: number): string {
   const d = new Date(ts * 1000);
-  return d.toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" });
+  return d.toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function PendingRelaysPage({ activeQQ, token }: Props) {
-  const [relays, setRelays] = useState<PendingRelay[]>([]);
+export default function PendingRelaysPage({ activeQQ }: Props) {
+  const [relays, setRelays] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
     if (!activeQQ) return;
-    const t = token || localStorage.getItem("token") || "";
     setLoading(true);
     try {
+      const t = localStorage.getItem("token") || "";
       const r = await fetch(`/api/instances/${activeQQ}/pending_relays`, {
         headers: { "Authorization": `Bearer ${t}` },
       });
@@ -33,32 +28,38 @@ export default function PendingRelaysPage({ activeQQ, token }: Props) {
 
   const cancelRelay = async (id: string) => {
     if (!confirm("取消这条代传话？")) return;
-    const t = token || localStorage.getItem("token") || "";
+    const t = localStorage.getItem("token") || "";
     await fetch(`/api/instances/${activeQQ}/pending_relays/${id}`, {
-      method: "DELETE",
-      headers: { "Authorization": `Bearer ${t}` },
+      method: "DELETE", headers: { "Authorization": `Bearer ${t}` },
     });
     load();
   };
+
+  if (!activeQQ) return <div className="empty-state">请先选择实例</div>;
+
+  const pending = relays.filter((r) => !r.sent);
 
   return (
     <div className="main-content">
       <div className="page-header">
         <h2>待发送代传话</h2>
-        <span className="badge">{relays.length} 条</span>
+        <span className="badge">{pending.length} 条</span>
+        <button className="btn-ghost btn-sm" onClick={load} style={{ marginLeft: 12 }}>刷新</button>
       </div>
-      {loading ? <p className="dim">加载中...</p> : relays.length === 0 ? <p className="dim">暂无待发送的代传话</p> : (
+      {loading ? <p className="dim">加载中...</p> : pending.length === 0 ? (
+        <div className="empty-state">暂无待发送的代传话</div>
+      ) : (
         <div className="list">
-          {relays.filter((r: any) => !r.sent).map((r: any) => (
-            <div key={r.id} className="list-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontWeight: 500 }}>【{r.from_role}】→ 【{r.to_role}】</div>
-                <div style={{ marginTop: 4 }}>{r.content}</div>
-                <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
-                  发送时间: {fmtTime(r.send_at)} {r.voice ? " | 语音" : ""}
-                </div>
+          {pending.map((r) => (
+            <div key={r.id} className="list-item">
+              <div className="list-item-title">【{r.from_role}】→ 【{r.to_role}】</div>
+              <div style={{ margin: "4px 0" }}>{r.content}</div>
+              <div className="list-item-meta">
+                发送: {fmtTime(r.send_at)} {r.voice ? "· 语音" : ""}
               </div>
-              <button className="btn-danger btn-sm" onClick={() => cancelRelay(r.id)}>取消</button>
+              <div style={{ marginTop: 8 }}>
+                <button className="btn-danger btn-sm" onClick={() => cancelRelay(r.id)}>取消</button>
+              </div>
             </div>
           ))}
         </div>
