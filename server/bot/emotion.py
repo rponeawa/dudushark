@@ -6,7 +6,7 @@ LLM outputs emotion name, system manages smooth transitions.
 import json
 from pathlib import Path
 
-EMOTIONS = ["开心", "生气", "难过", "兴奋", "撒娇", "平静", "困惑", "傲娇"]
+EMOTIONS = ["开心", "生气", "难过", "撒娇", "平静"]
 
 TRANSITION_SPEED = 0.65   # 每次 tick 过渡进度，约 2 次完成
 DEFAULT_INTENSITY = 0.6   # 新情绪的默认强度
