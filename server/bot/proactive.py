@@ -438,6 +438,20 @@ class ProactiveScheduler:
                 if i < len(replies) - 1:
                     await asyncio.sleep(max(2.0, len(text) * 0.08 + 1.0))
 
+            # 发送成功后持久化到对话历史
+            async with handler._lock:
+                if conv_key not in handler._conversations:
+                    handler._conversations[conv_key] = []
+                for rp in replies:
+                    hist_content = f"[发出语音] {rp.text}" if rp.voice else rp.text
+                    handler._conversations[conv_key].append({
+                        "role": "assistant",
+                        "content": hist_content,
+                        "ts": time.time(),
+                        "proactive": True,
+                    })
+                handler._persist_convo(conv_key)
+
             now = self._now()
             self._last_global_ts = now
             self._last_conv_proactive[conv_key] = now

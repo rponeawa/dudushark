@@ -1568,20 +1568,6 @@ class MessageHandler:
             for part in parts:
                 result.append(ReplyPart(part))
 
-        async with self._lock:
-            key = self._conv_key(user_id, group_id)
-            if key not in self._conversations:
-                self._conversations[key] = []
-            for rp in result:
-                hist_content = f"[发出语音] {rp.text}" if rp.voice else rp.text
-                self._conversations[key].append({
-                    "role": "assistant",
-                    "content": hist_content,
-                    "ts": time.time(),
-                    "proactive": True,
-                })
-            self._persist_convo(key)
-
         return result
 
 
