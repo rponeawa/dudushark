@@ -1023,39 +1023,18 @@ class MessageHandler:
                 import base64 as _b64
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
-                logger.info(f"[{self.bot_qq}] Sticker lib has {lib.count()} stickers, searching...")
                 matches = await lib.search(send_s.strip(), n=1)
-                logger.info(f"[{self.bot_qq}] Sticker search returned {len(matches)} matches")
                 if matches:
                     s = matches[0]
                     lib.mark_used(s["id"])
                     path = lib.get_path(s["id"])
-                    logger.info(f"[{self.bot_qq}] Sticker path: {path}, exists: {path.exists() if path else 'N/A'}")
                     if path and path.exists():
                         b64 = _b64.b64encode(path.read_bytes()).decode()
-                        logger.info(f"[{self.bot_qq}] Sticker base64: {len(b64)} chars, scheduling send")
-                        # 不通过 result 发送（避免复杂的 result 生命周期问题），直接用 OneBot 发送
-                        _b64_val = b64
-                        _target = user_id
-                        _is_group = is_group
-                        _group_id = group_id
-                        _bot = self.bot_qq
-                        async def _send_sticker():
-                            await asyncio.sleep(0.5)
-                            from server.bot.onebot_handler import onebot_server
-                            client = onebot_server.get_client(_bot)
-                            if client and client.connected:
-                                if _is_group:
-                                    await client.send_group_msg(_group_id, f"[CQ:image,file=base64://{_b64_val}]")
-                                else:
-                                    await client.send_private_msg(_target, f"[CQ:image,file=base64://{_b64_val}]")
-                                logger.info(f"[{_bot}] Sticker sent via OneBot")
-                        asyncio.create_task(_send_sticker())
+                        result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
                     else:
                         logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
                 else:
                     logger.info(f"[{self.bot_qq}] No sticker match for: {send_s.strip()}")
-            logger.info(f"[{self.bot_qq}] End of if data block, result={len(result)}")
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
@@ -1066,8 +1045,6 @@ class MessageHandler:
         if reply_text.startswith(">>"):
             want_quote = True
             reply_text = reply_text[2:].strip()
-
-        logger.info(f"[{self.bot_qq}] After sticker: reply_text={reply_text[:50]!r}, result={len(result)} parts")
 
         if not reply_text or reply_text.strip() == "[SKIP]":
             logger.info(f"[{self.bot_qq}] Reply is SKIP/empty, result has {len(result)} parts")

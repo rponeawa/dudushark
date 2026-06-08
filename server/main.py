@@ -106,7 +106,6 @@ async def onebot_ws(ws: WebSocket, qq: str):
             image_infos=kwargs.get("image_infos", []),
         )
         if not replies:
-            logger.info(f"[发送] 无回复 (replies={replies!r})")
             return
 
         client = onebot_server.get_client(kwargs["bot_qq"])
