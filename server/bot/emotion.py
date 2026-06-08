@@ -53,9 +53,9 @@ class DuduEmotion:
             if name not in self.values:
                 continue
             delta = max(-1.0, min(1.0, float(delta)))
+            target = max(0.0, min(1.0, self.values[name] + delta))
             self.values[name] = max(0.0, min(1.0,
-                self.values[name] * (1 - SMOOTH_FACTOR) +
-                max(0.0, self.values[name] + delta) * SMOOTH_FACTOR
+                self.values[name] * (1 - SMOOTH_FACTOR) + target * SMOOTH_FACTOR
             ))
         self._save()
 
