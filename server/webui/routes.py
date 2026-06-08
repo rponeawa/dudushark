@@ -32,6 +32,8 @@ from server.config import (
 from server.bot.onebot_handler import onebot_server
 from server.bot.message_handler import get_message_handler
 from server.bot.mood import get_mood
+from server.bot.emotion import get_emotion
+from server.bot.stickers import get_sticker_library
 from server.memory.manager import get_memory_manager
 from server.napcat.manager import napcat_manager
 
@@ -223,6 +225,7 @@ async def instance_detail_status(qq: str):
         "memory_stats": mem_stats,
         "total_memories": sum(mem_stats.values()),
         "mood": mood.state_dict(),
+        "emotion": get_emotion(qq).state_dict(),
     }
 
 
@@ -353,6 +356,25 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         return {"ok": True, "content": content}
     else:
         raise HTTPException(500, f"发帖失败: {msg}")
+
+
+# ---- 表情包收藏 ----
+
+@router.get("/instances/{qq}/stickers")
+async def list_stickers(qq: str):
+    lib = get_sticker_library(qq)
+    return {"stickers": lib.get_all(), "count": lib.count()}
+
+
+@router.delete("/instances/{qq}/stickers/{sticker_id}")
+async def remove_sticker(qq: str, sticker_id: int):
+    lib = get_sticker_library(qq)
+    for s in lib.stickers:
+        if s["id"] == sticker_id:
+            lib.stickers.remove(s)
+            lib._save()
+            return {"ok": True}
+    raise HTTPException(404, "表情包不存在")
 
 
 # ---- 代传话 pending 管理 ----

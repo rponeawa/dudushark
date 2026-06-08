@@ -483,7 +483,7 @@ class MessageHandler:
             "【记忆规则 - 同样重要】对方说了有点意思的事就可以记。关键信息、性格、喜好、经历、约定都值得记。日常寒暄——打招呼、道晚安、随口闲聊——不是记忆。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。不用markdown代码块包裹。\n"
-            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null}\n"
+            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null,\"emotion\":null,\"save_sticker\":null,\"send_sticker\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
@@ -495,6 +495,9 @@ class MessageHandler:
             json_prompt += "\n- group_memory: 群整体的事（里程碑、群活动、群氛围）。格式必须为: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本"
         json_prompt += (
             "\n- diary: 鱼的日记。今天有意思的事、心情变化、值得记住的瞬间——挑有感觉的写，不用什么都记。格式同memory。相同category+title会更新。"
+            "- emotion: 你的情绪变化。格式: {\"开心\":0.1,\"生气\":-0.2,...}，正数增加负数减少。可选字段：开心/生气/难过/兴奋/撒娇/平静/困惑/傲娇。情绪变了才填，没变留null。\n"
+            "- save_sticker: 收藏对方发的表情包。你真的喜欢才收藏。格式: {\"url\":\"图片URL\",\"description\":\"描述这个表情\",\"tags\":[\"标签\"]}，不喜欢就null。\n"
+            "- send_sticker: 发收藏的表情。填描述关键词来搜索匹配的表情，偶尔用，不要每次都发。null=不发。\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
@@ -516,6 +519,18 @@ class MessageHandler:
         # 动态上下文
         if mood_context:
             messages.append({"role": "system", "content": "## 你现在的心情\n" + mood_context})
+
+        from server.bot.emotion import get_emotion
+        emotion = get_emotion(self.bot_qq)
+        emotion_ctx = emotion.context()
+        messages.append({"role": "system", "content": emotion_ctx})
+
+        # 已收藏的表情包列表，避免重复收藏
+        from server.bot.stickers import get_sticker_library
+        lib = get_sticker_library(self.bot_qq)
+        sticker_hint = lib.existing_summary()
+        if sticker_hint:
+            messages.append({"role": "system", "content": sticker_hint})
 
         if _is_family and not is_group and self.cfg.family_memory:
             messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
@@ -863,6 +878,16 @@ class MessageHandler:
                     if relay_final and isinstance(relay_final, dict) and is_sender_admin:
                         if await self._should_relay(text):
                             asyncio.create_task(self._relay_message(relay_final, user_id))
+                    emo_changes = final_data.get("emotion")
+                    if emo_changes and isinstance(emo_changes, dict):
+                        from server.bot.emotion import get_emotion
+                        get_emotion(self.bot_qq).update(emo_changes)
+                    save_s = final_data.get("save_sticker")
+                    if save_s and isinstance(save_s, dict) and save_s.get("url"):
+                        from server.bot.stickers import get_sticker_library
+                        lib = get_sticker_library(self.bot_qq)
+                        lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
+                        logger.info(f"[{self.bot_qq}] Sticker saved (search): {save_s.get('description', '')[:30]}")
 
                     from server.bot.onebot_handler import onebot_server
                     client = onebot_server.get_client(self.bot_qq)
@@ -953,6 +978,27 @@ class MessageHandler:
                 _qzone_content = _qzone_content.strip().strip('"')[:500]
                 if _qzone_content and await self._should_post_qzone(_qzone_content, text, user_id, group_id):
                     asyncio.create_task(self._post_qzone(_qzone_content, user_id, group_id))
+            emo_changes = data.get("emotion")
+            if emo_changes and isinstance(emo_changes, dict):
+                from server.bot.emotion import get_emotion
+                get_emotion(self.bot_qq).update(emo_changes)
+            # 收藏表情包
+            save_s = data.get("save_sticker")
+            if save_s and isinstance(save_s, dict) and save_s.get("url"):
+                from server.bot.stickers import get_sticker_library
+                lib = get_sticker_library(self.bot_qq)
+                lib.add(str(save_s["url"]), str(save_s.get("description", "")), save_s.get("tags", []))
+                logger.info(f"[{self.bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
+            # 发送收藏的表情
+            send_s = data.get("send_sticker")
+            if send_s and isinstance(send_s, str) and send_s.strip():
+                from server.bot.stickers import get_sticker_library
+                lib = get_sticker_library(self.bot_qq)
+                matches = lib.search(send_s.strip(), n=1)
+                if matches:
+                    s = matches[0]
+                    lib.mark_used(s["id"])
+                    result.append(ReplyPart(f"[表情: {s['description']}]"))
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):

@@ -60,6 +60,8 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
                  ├─ bot/message_handler.py             (消息合并缓冲 → LLM 调用 → 回复拆分)
                  ├─ bot/persona.py                     (System prompt 人设定义)
                  ├─ bot/mood.py                         (全局心情/睡眠：影响所有回复+主动发言)
+                 ├─ bot/emotion.py                      (情绪跟踪：8种情绪平滑更新)
+                 ├─ bot/stickers.py                     (表情包收藏：URL去重+描述标签)
                  ├─ memory/manager.py                  (按 user_id 分目录的 MD 记忆 CRUD)
                  ├─ memory/vector_store.py             (ChromaDB + SiliconFlow embedding)
                  ├─ memory/context.py                  (上下文压缩，摘要合并)
@@ -139,6 +141,18 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - `system_mood_context()` 注入系统 prompt
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 
+**情绪系统：**
+- `DuduEmotion` 单例，独立于心情/睡眠。跟踪 8 种情绪（开心/生气/难过/兴奋/撒娇/平静/困惑/傲娇）
+- LLM 输出 `emotion` JSON 字段表达情绪变化（正增负减），每次回复平滑更新（factor=0.35）
+- 情绪平稳时 LLM 不输出该字段。当前情绪注入 system prompt
+- 前端状态页显示各情绪百分比
+
+**表情包收藏：**
+- `StickerLibrary` 管理收藏的表情包，URL 去重
+- LLM 通过 `save_sticker` 字段收藏喜欢的表情包（含描述+标签），`send_sticker` 搜索并发送
+- 已有收藏列表注入 prompt 避免重复收藏
+- 前端表情包 tab 可浏览、删除收藏
+
 **主动消息 + 提醒：**
 - 欲望驱动：`curiosity_threshold × energy` 一次随机决定是否说话（默认 0.15 × 精力）
 - **全局冷却**：两次主动消息间隔至少 30 分钟（`proactive_global_cooldown_sec: 1800`）
@@ -174,6 +188,9 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - relay: `{"to_role":"角色名","content":"转达内容","voice":null|"last"|"all","voice_emotion":null|"...","delay_minutes":1}` — 管理员间代传话。延迟按传话者要求，未指定默认1分钟。WebUI 可查看/取消 pending
 - qzone: 字符串，QQ 空间说说内容。仅管理员消息且含关键词时字段可见，主 LLM 自行判断是否填
 - search: `"search":"关键词"` — LLM 请求网络搜索，与 reply 同时输出，系统异步执行搜索+二次 LLM
+- emotion: `{"开心":0.1,"生气":-0.2}` — 情绪变化，正增负减。情绪平稳不输出
+- save_sticker: `{"url":"...","description":"...","tags":[]}` — 收藏喜欢的表情包，URL 自动去重
+- send_sticker: 搜索关键词 → 发收藏的表情。偶尔用，不总发
 
 **角色/管理员系统：**
 - `BotConfig.admins` 列表，运行时 QQ 匹配 → 用户名后标注【角色】标签
@@ -204,7 +221,9 @@ data/instances/{qq}/
   ├── reminders.json
   ├── qzone_posts.json
   ├── qzone_state.json
-  └── pending_relays.json
+  ├── pending_relays.json
+  ├── emotion_state.json
+  └── stickers.json
 ```
 
 ## API 路由

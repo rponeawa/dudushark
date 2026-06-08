@@ -111,6 +111,11 @@ export interface MoodState {
   energy: number;
 }
 
+export interface EmotionState {
+  values: Record<string, number>;
+  dominant: string;
+}
+
 export interface InstanceDetailStatus {
   qq: string;
   connected: boolean;
@@ -122,6 +127,7 @@ export interface InstanceDetailStatus {
   memory_stats: Record<string, number>;
   total_memories: number;
   mood?: MoodState;
+  emotion?: EmotionState;
 }
 export const getSystemStatus = () => req<SystemStatus>("/status");
 export const getInstanceStatus = (qq: string) => req<InstanceDetailStatus>(`/instances/${qq}/status`);
@@ -177,3 +183,13 @@ export const qzoneManualPost = (qq: string, content?: string) =>
     method: "POST",
     body: JSON.stringify(content ? { content } : {}),
   });
+
+// 表情包收藏
+export interface StickerEntry {
+  id: number; url: string; description: string; tags: string[];
+  saved_at: number; used_count: number;
+}
+export const getStickers = (qq: string) =>
+  req<{ stickers: StickerEntry[]; count: number }>(`/instances/${qq}/stickers`);
+export const removeSticker = (qq: string, id: number) =>
+  req<{ ok: boolean }>(`/instances/${qq}/stickers/${id}`, { method: "DELETE" });

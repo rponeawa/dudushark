@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, Reminder, QzonePost } from "../api";
+import { getSystemStatus, getInstanceStatus, getReminders, getPausedGroups, pauseGroup, resumeGroup, getQzonePosts, qzoneManualPost, SystemStatus, InstanceDetailStatus, MoodState, EmotionState, Reminder, QzonePost } from "../api";
 
 function fmtUptime(s: number): string {
   if (s < 60) return `${s}s`;
@@ -230,8 +230,27 @@ export default function Status() {
           </div>
           {detail.mood && (
             <div className="form-group" style={{ marginBottom: 12 }}>
-              <label>心情</label>
+              <label>精力状态</label>
               <MoodCard mood={detail.mood} />
+            </div>
+          )}
+          {detail.emotion && (
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label>情绪 ({detail.emotion.dominant})</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {Object.entries(detail.emotion.values).map(([k, v]) => {
+                  const pct = Math.round(v * 100);
+                  if (pct < 5) return null;
+                  return (
+                    <span key={k} style={{
+                      padding: "2px 8px", borderRadius: 4, fontSize: 12,
+                      background: pct > 50 ? "var(--accent)" : "var(--bg-card)",
+                      color: pct > 50 ? "#fff" : "var(--text-dim)",
+                      border: "1px solid var(--border)",
+                    }}>{k} {pct}%</span>
+                  );
+                })}
+              </div>
             </div>
           )}
           <div className="form-row">

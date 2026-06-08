@@ -5,6 +5,7 @@ import Instances from "./pages/Instances";
 import Conversations from "./pages/Conversations";
 import Memories from "./pages/Memories";
 import Settings from "./pages/Settings";
+import Stickers from "./pages/Stickers";
 import { listInstances, InstanceInfo, login, setToken, getToken } from "./api";
 
 type Tab = { label: string; path: string; icon: string };
@@ -14,6 +15,7 @@ const TABS: Tab[] = [
   { label: "实例", path: "/instances", icon: "dns" },
   { label: "对话", path: "/conversations", icon: "chat" },
   { label: "记忆", path: "/memories", icon: "psychology" },
+  { label: "表情包", path: "/stickers", icon: "gif_box" },
   { label: "设置", path: "/settings", icon: "settings" },
 ];
 
@@ -170,6 +172,10 @@ export default function App() {
           <Route
             path="/memories"
             element={<Memories instances={instances} activeQQ={activeQQ} setActiveQQ={setActiveQQ} />}
+          />
+          <Route
+            path="/stickers"
+            element={<Stickers activeQQ={activeQQ} />}
           />
           <Route
             path="/settings"
