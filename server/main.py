@@ -61,6 +61,12 @@ if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
 
+@app.get("/logs")
+async def logs_page():
+    log_html = STATIC_DIR / "logs.html"
+    return FileResponse(log_html) if log_html.exists() else HTMLResponse(status_code=404)
+
+
 @app.get("/favicon.ico")
 async def favicon():
     fav = STATIC_DIR / "favicon.ico"

@@ -2,6 +2,7 @@
 Web UI API 路由。
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -602,3 +603,26 @@ async def push_event(event: dict):
             dead.append(ws)
     for ws in dead:
         _widget_ws.remove(ws)
+
+
+# ---- 实时日志 WebSocket ----
+
+@router.websocket("/ws/logs")
+async def logs_ws(ws: WebSocket):
+    await ws.accept()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "journalctl", "-u", "dudushark", "-f", "--no-pager", "-o", "cat", "-n", "200",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                await ws.send_text(line.decode("utf-8", errors="replace").rstrip("\n"))
+        finally:
+            proc.kill()
+            await proc.wait()
+    except WebSocketDisconnect:
+        pass
