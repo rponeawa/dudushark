@@ -358,6 +358,21 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
         raise HTTPException(500, f"发帖失败: {msg}")
 
 
+# ---- 主动消息暂停管理 ----
+
+@router.get("/instances/{qq}/proactive_paused")
+async def list_proactive_paused(qq: str):
+    handler = get_message_handler(qq)
+    return {"paused": handler.get_proactive_paused()}
+
+
+@router.delete("/instances/{qq}/proactive_paused/{user_id}")
+async def unpause_proactive(qq: str, user_id: str):
+    handler = get_message_handler(qq)
+    handler.unpause_proactive(user_id)
+    return {"ok": True}
+
+
 # ---- 表情包收藏 ----
 
 @router.get("/sticker-image", include_in_schema=False)

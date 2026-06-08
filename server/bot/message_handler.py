@@ -222,6 +222,63 @@ class MessageHandler:
         except Exception:
             pass
 
+    def _pause_proactive_for(self, user_id: str, reason: str):
+        """暂停对某用户的主动消息。系统根据原因计算暂停时长。"""
+        import datetime as _dt
+        tz = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+        now = _dt.datetime.now(tz)
+        r = reason.lower()
+        # 睡觉相关 → 到第二天早上 8 点
+        if any(w in r for w in ("睡", "晚安", "night", "困", "休息", "眠")):
+            wake = now.replace(hour=8, minute=0, second=0)
+            if now.hour >= 3:
+                wake += _dt.timedelta(days=1)
+            until = wake.timestamp()
+        # 忙/工作 → 4 小时
+        elif any(w in r for w in ("忙", "工作", "开会", "事情", "事")):
+            until = now.timestamp() + 14400
+        # 默认 → 2 小时
+        else:
+            until = now.timestamp() + 7200
+        self._set_proactive_pause(user_id, until)
+        logger.info(f"[{self.bot_qq}] Proactive paused for {user_id} until {_dt.datetime.fromtimestamp(until, tz).strftime('%H:%M')} (reason: {reason})")
+
+    def _set_proactive_pause(self, user_id: str, until_ts: float):
+        from server.config import get_instance_dir
+        path = get_instance_dir(self.bot_qq) / "proactive_paused.json"
+        data = {}
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        data[user_id] = until_ts
+        # 清理已过期的
+        now = time.time()
+        data = {k: v for k, v in data.items() if v > now}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+    def get_proactive_paused(self) -> dict[str, float]:
+        from server.config import get_instance_dir
+        path = get_instance_dir(self.bot_qq) / "proactive_paused.json"
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            now = time.time()
+            return {k: v for k, v in data.items() if v > now}
+        except Exception:
+            return {}
+
+    def unpause_proactive(self, user_id: str):
+        from server.config import get_instance_dir
+        path = get_instance_dir(self.bot_qq) / "proactive_paused.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data.pop(user_id, None)
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
     def _note_for_llm(self, conv_key: str, note: str):
         """注入一条系统提示到对话历史，下次 LLM 调用可见。"""
         if conv_key not in self._conversations:
@@ -510,7 +567,7 @@ class MessageHandler:
             "【记忆规则 - 同样重要】对方说了有点意思的事就可以记。关键信息、性格、喜好、经历、约定都值得记。日常寒暄——打招呼、道晚安、随口闲聊——不是记忆。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。不用markdown代码块包裹。\n"
-            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null,\"emotion\":null,\"save_sticker\":null,\"send_sticker\":null}\n"
+            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null,\"emotion\":null,\"save_sticker\":null,\"send_sticker\":null,\"pause_proactive\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
@@ -525,6 +582,7 @@ class MessageHandler:
             "- emotion: 你当前的情绪（只能有一种）。可选：开心/生气/难过/撒娇/平静。变了才填，没变留null。\n"
             "- save_sticker: 收藏对方发的表情包。你觉得可爱、有趣、鲨鱼相关、啊呜风格的都可以存——如果你在回复里夸它了，顺手存下来。但看不懂的、奇怪的、恶心的不要存。格式: {\"url\":\"图片URL\",\"description\":\"描述\",\"tags\":[\"标签\"]}，不喜欢就null。\n"
             "- send_sticker: 发收藏的表情。填简短关键词（2-5个字），不要填完整描述。偶尔用，不要每次都发。null=不发。\n"
+            "- pause_proactive: 暂停对该用户的主动消息。对方说去睡了/去忙了/别打扰时填（如\"去睡了\"/\"在忙\"），系统自动算暂停多久。绝大部分时候不触发，null即可。\n"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
@@ -1010,6 +1068,10 @@ class MessageHandler:
             if emo and isinstance(emo, str):
                 from server.bot.emotion import get_emotion
                 get_emotion(self.bot_qq).set_emotion(emo)
+            # 暂停主动消息
+            pp = data.get("pause_proactive")
+            if pp and isinstance(pp, str) and pp.strip():
+                self._pause_proactive_for(user_id, pp.strip())
             # 收藏表情包
             save_s = data.get("save_sticker")
             if save_s and isinstance(save_s, dict) and save_s.get("url"):

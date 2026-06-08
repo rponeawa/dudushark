@@ -177,6 +177,11 @@ class ProactiveScheduler:
             if now - self._last_conv_proactive.get(conv_key, 0) < self._cfg.proactive_per_conv_cooldown_sec:
                 continue
 
+            # 用户被暂停主动消息
+            paused = handler.get_proactive_paused()
+            if user_id in paused and now < paused[user_id]:
+                continue
+
             # Sleep + no override → skip
             if self._is_sleep_time() and not self._has_sleep_override(user_id):
                 continue
