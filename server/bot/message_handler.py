@@ -558,7 +558,7 @@ class MessageHandler:
         lib = get_sticker_library(self.bot_qq)
         sticker_hint = lib.existing_summary()
         if sticker_hint:
-            messages.append({"role": "system", "content": sticker_hint})
+            messages.append({"role": "system", "content": sticker_hint + "\n（发收藏的表情用 send_sticker 字段，不要去网上搜！）"})
 
         if _is_family and not is_group and self.cfg.family_memory:
             messages.append({"role": "system", "content": "## 家族记忆\n" + self.cfg.family_memory})
@@ -768,7 +768,7 @@ class MessageHandler:
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": "搜索互联网获取实时信息，如新闻、天气、最新事件、百科知识等。只在确实需要查资料时才调用。注意：发自己收藏的表情包用send_sticker字段，不要搜。",
+                    "description": "搜索互联网获取实时信息（新闻/天气/百科等）。只在确实需要查资料时才调用。绝对不要搜索表情包——发收藏的表情用send_sticker字段。",
                     "parameters": {
                         "type": "object",
                         "properties": {
