@@ -10,6 +10,7 @@ import RemindersPage from "./pages/Reminders";
 import PendingRelaysPage from "./pages/PendingRelays";
 import QzonePage from "./pages/Qzone";
 import PausedGroupsPage from "./pages/PausedGroups";
+import LogsPage from "./pages/Logs";
 import { listInstances, InstanceInfo, login, setToken, getToken } from "./api";
 
 type Tab = { label: string; path: string; icon: string };
@@ -24,6 +25,7 @@ const TABS: Tab[] = [
   { label: "空间", path: "/qzone", icon: "public" },
   { label: "暂停", path: "/paused", icon: "pause_circle" },
   { label: "表情包", path: "/stickers", icon: "gif_box" },
+  { label: "日志", path: "/logs-spa", icon: "terminal" },
   { label: "设置", path: "/settings", icon: "settings" },
 ];
 
@@ -185,6 +187,7 @@ export default function App() {
           <Route path="/relays" element={<PendingRelaysPage activeQQ={activeQQ} />} />
           <Route path="/qzone" element={<QzonePage activeQQ={activeQQ} />} />
           <Route path="/paused" element={<PausedGroupsPage activeQQ={activeQQ} />} />
+          <Route path="/logs-spa" element={<LogsPage />} />
           <Route path="/stickers" element={<Stickers activeQQ={activeQQ} />} />
           <Route
             path="/settings"
