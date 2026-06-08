@@ -489,12 +489,12 @@ class MessageHandler:
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
             "- voice: 发送语音。大部分时候null。撒娇卖萌、对方要求、自己特别开心/兴奋/难过时发\"last\"（最后一段发语音，这种比较常用）。整条都想说出来时发\"all\"（整段语音，很少用）。\n"
             "- voice_emotion: 语音情绪。null或\"撒娇\"/\"高兴\"/\"非常高兴\"/\"生气\"/\"非常生气\"/\"悲伤\"/\"兴奋\"/\"惊讶\"/\"困惑\"/\"恐惧\"。只在voice不为null时有效。\n"
-            "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。相同类别+标题会更新"
+            "- memory: 记住某个人的事。格式必须为: {\"user\":\"名字\",\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本。user填消息里的名字。【重要】相同category+title会更新而非新建——看到已有条目时优先更新它"
         )
         if is_group:
             json_prompt += "\n- group_memory: 群整体的事（里程碑、群活动、群氛围）。格式必须为: {\"category\":\"类别\",\"title\":\"标题\",\"content\":\"内容\"}，不能是纯文本"
         json_prompt += (
-            "\n- diary: 鱼的日记。今天发生了什么有趣的事、跟谁聊了什么、心情怎么样、有什么想法——都可以写。像写日记一样自然，不用太正式。格式同memory。"
+            "\n- diary: 鱼的日记。今天有意思的事、心情变化、值得记住的瞬间——挑有感觉的写，不用什么都记。格式同memory。相同category+title会更新。"
             "- forget: 要删除的记忆，格式: {\"category\":\"类别\",\"title\":\"标题\"}\n"
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
@@ -537,7 +537,7 @@ class MessageHandler:
                     existing_titles.append(f"{cat_m.group(1) if cat_m else '?'}/{title_m.group(1)}")
             title_hint = ""
             if existing_titles:
-                title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。）"
+                title_hint = "\n（已有记忆条目: " + ", ".join(existing_titles[:15]) + "。——同category+title会更新而非新建，尽量更新已有条目。）"
             messages.append({"role": "system", "content": "## 鱼对这个人的记忆：\n" + memories_text + title_hint})
 
         # 家族提醒（history 之前，保持缓存边界清晰）
