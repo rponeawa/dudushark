@@ -16,12 +16,18 @@ from server.memory.vector_store import VectorStore
 _CN_TZ = timezone(timedelta(hours=8))
 
 
-def _cn_now() -> datetime:
-    return datetime.now(_CN_TZ)
-
-
-def _cn_now_str() -> str:
-    return _cn_now().strftime("%Y-%m-%dT%H:%M:%S+08")
+def _utc_to_cn(text: str) -> str:
+    """将记忆文本中的 UTC 时间转换为北京时间。"""
+    return re.sub(
+        r"时间: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z",
+        lambda m: "时间: " + (
+            datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S")
+            .replace(tzinfo=timezone.utc)
+            .astimezone(_CN_TZ)
+            .strftime("%Y-%m-%d %H:%M")
+        ),
+        text,
+    )
 
 
 class MemoryManager:
@@ -52,7 +58,7 @@ class MemoryManager:
 
     def remember(self, user_id: str, category: str, title: str, content: str) -> bool:
         """写入或更新一条记忆，同步向量索引。返回 True=新建, False=更新。"""
-        now = _cn_now_str()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         entry_id = self._make_entry_id(user_id, category, title)
         filepath = self._entry_file(user_id, category, title)
         is_new = not filepath.exists()
@@ -89,26 +95,26 @@ class MemoryManager:
     # ---- 读取 ----
 
     def recall_by_vector(self, user_id: str, query: str, n: int = 10) -> list[dict]:
-        """向量检索记忆。"""
+        """向量检索记忆。返回时时间转为北京时间。"""
         try:
             vs = self._get_vs(user_id)
             results = vs.search(query, n)
             return [
-                {"id": r["id"], "text": r["text"], "score": r["score"], "meta": r["meta"]}
+                {"id": r["id"], "text": _utc_to_cn(r["text"]), "score": r["score"], "meta": r["meta"]}
                 for r in results
             ]
         except Exception:
             return []
 
     def recall_by_category(self, user_id: str, category: str) -> list[dict]:
-        """按分类列出记忆。"""
+        """按分类列出记忆。返回时时间转为北京时间。"""
         user_dir = self._read_user_dir(user_id)
         if not user_dir:
             return []
         memories = []
         for f in sorted(user_dir.glob(f"{category}_*.md")):
             text = f.read_text(encoding="utf-8")
-            memories.append({"file": str(f), "text": text})
+            memories.append({"file": str(f), "text": _utc_to_cn(text)})
         return memories
 
     def _read_user_dir(self, user_id: str) -> Path | None:
@@ -117,18 +123,18 @@ class MemoryManager:
         return p if p.is_dir() else None
 
     def recall_all(self, user_id: str) -> list[dict]:
-        """列出该用户所有记忆。"""
+        """列出该用户所有记忆。返回时时间转为北京时间。"""
         user_dir = self._read_user_dir(user_id)
         if not user_dir:
             return []
         memories = []
         for f in sorted(user_dir.glob("*.md")):
             text = f.read_text(encoding="utf-8")
-            memories.append({"file": f.name, "text": text})
+            memories.append({"file": f.name, "text": _utc_to_cn(text)})
         return memories
 
     def recall_by_date(self, user_id: str, date_str: str) -> list[dict]:
-        """按日期查找记忆。date_str 格式 YYYY-MM-DD"""
+        """按日期查找记忆。date_str 格式 YYYY-MM-DD。返回时间转为北京时间。"""
         user_dir = self._read_user_dir(user_id)
         if not user_dir:
             return []
@@ -136,14 +142,14 @@ class MemoryManager:
         for f in sorted(user_dir.glob("*.md")):
             text = f.read_text(encoding="utf-8")
             if date_str in text:
-                memories.append({"file": f.name, "text": text})
+                memories.append({"file": f.name, "text": _utc_to_cn(text)})
         return memories
 
     def recall_recent(self, user_id: str, days: int = 7) -> list[dict]:
         """获取最近 N 天的记忆。"""
         from datetime import timedelta
 
-        cutoff = (_cn_now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
         user_dir = self._read_user_dir(user_id)
         if not user_dir:
             return []
@@ -152,7 +158,7 @@ class MemoryManager:
             text = f.read_text(encoding="utf-8")
             m = re.search(r"时间: (\d{4}-\d{2}-\d{2})", text)
             if m and m.group(1) >= cutoff:
-                memories.append({"file": f.name, "text": text})
+                memories.append({"file": f.name, "text": _utc_to_cn(text)})
         return memories
 
     # ---- 删除 ----
