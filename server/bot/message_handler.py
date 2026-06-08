@@ -1073,6 +1073,8 @@ class MessageHandler:
         voice_mode = data.get("voice") if data else None
         voice_emotion = data.get("voice_emotion", "") if data else ""
         parts = self._split_reply(reply_text)
+        # 保留已加入 result 的内容（如 send_sticker），只追加文字/语音部分
+        existing = result
         result = []
 
         if voice_mode == "all":
@@ -1108,7 +1110,7 @@ class MessageHandler:
                 qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
                 result.append(ReplyPart(part, qid))
                 self._append_history(user_id, "assistant", part, group_id)
-        return result
+        return existing + result
 
     async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
         """JSON 解析失败时的记忆兜底提取。"""
