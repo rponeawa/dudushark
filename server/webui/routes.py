@@ -389,11 +389,8 @@ async def list_stickers(qq: str):
 @router.delete("/instances/{qq}/stickers/{sticker_id}")
 async def remove_sticker(qq: str, sticker_id: int):
     lib = get_sticker_library(qq)
-    for s in lib.stickers:
-        if s["id"] == sticker_id:
-            lib.stickers.remove(s)
-            lib._save()
-            return {"ok": True}
+    if lib.remove(sticker_id):
+        return {"ok": True}
     raise HTTPException(404, "表情包不存在")
 
 

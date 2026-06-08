@@ -1,6 +1,5 @@
 """
-DuduShark sticker collection — save liked stickers with descriptions.
-Dudu can save stickers she likes and occasionally send them.
+DuduShark sticker collection — save liked stickers with vector search.
 """
 
 import json
@@ -12,11 +11,20 @@ class StickerLibrary:
     def __init__(self, bot_qq: str):
         self.bot_qq = bot_qq
         self.stickers: list[dict] = []
+        self._vs = None
         self._load()
 
     def _path(self) -> Path:
         from server.config import get_instance_dir
         return get_instance_dir(self.bot_qq) / "stickers.json"
+
+    def _get_vs(self):
+        if self._vs is None:
+            from server.config import get_chroma_dir
+            from server.memory.vector_store import VectorStore
+            chroma_dir = get_chroma_dir(self.bot_qq)
+            self._vs = VectorStore(chroma_dir, "__stickers__")
+        return self._vs
 
     def _load(self):
         p = self._path()
@@ -32,29 +40,29 @@ class StickerLibrary:
         p.write_text(json.dumps(self.stickers, ensure_ascii=False, indent=2))
 
     def add(self, url: str, description: str, tags: list[str] | None = None) -> dict | None:
-        """Save a sticker Dudu likes. Deduplicates by URL. Returns the saved entry or None if duplicate."""
-        # URL 去重
         for s in self.stickers:
             if s.get("url") == url:
                 return None
+        sid = len(self.stickers) + 1
         entry = {
-            "id": len(self.stickers) + 1,
-            "url": url,
-            "description": description,
-            "tags": tags or [],
-            "saved_at": time.time(),
-            "used_count": 0,
+            "id": sid, "url": url, "description": description,
+            "tags": tags or [], "saved_at": time.time(), "used_count": 0,
         }
         self.stickers.append(entry)
         self._save()
+        # 写入向量索引
+        try:
+            vs = self._get_vs()
+            text = f"{description} {' '.join(tags or [])}"
+            vs.add(str(sid), text, {"id": sid})
+        except Exception:
+            pass
         return entry
 
     def existing_urls(self) -> list[str]:
-        """Return list of already-saved sticker URLs for prompt injection."""
         return [s["url"] for s in self.stickers]
 
     def existing_summary(self) -> str:
-        """Brief summary of saved stickers for LLM prompt."""
         if not self.stickers:
             return ""
         lines = ["已收藏的表情包:"]
@@ -63,22 +71,40 @@ class StickerLibrary:
         return "\n".join(lines)
 
     def search(self, query: str, n: int = 5) -> list[dict]:
-        """Simple keyword search in descriptions and tags."""
+        """Vector search with keyword fallback."""
         if not query:
             return self.stickers[-n:]
-        q = query.lower()
-        matches = []
-        for s in self.stickers:
-            score = 0
-            if q in s.get("description", "").lower():
-                score += 2
-            for t in s.get("tags", []):
-                if q in t.lower():
-                    score += 1
-            if score > 0:
-                matches.append((score, s))
-        matches.sort(key=lambda x: -x[0])
-        return [m[1] for m in matches[:n]]
+        if not self.stickers:
+            return []
+        results = []
+        # 向量搜索
+        try:
+            vs = self._get_vs()
+            raw = vs.search(query, n)
+            seen = set()
+            for r in raw:
+                sid = r.get("meta", {}).get("id") if r.get("meta") else None
+                if sid is None:
+                    sid = int(r["id"]) if r["id"].isdigit() else None
+                if sid and sid not in seen:
+                    seen.add(sid)
+                    for s in self.stickers:
+                        if s["id"] == sid:
+                            results.append(s)
+                            break
+        except Exception:
+            pass
+        # 关键字兜底：向量没命中时补
+        if len(results) < n:
+            q = query.lower()
+            for s in self.stickers:
+                if s in results:
+                    continue
+                if q in s.get("description", "").lower() or any(q in t.lower() for t in s.get("tags", [])):
+                    results.append(s)
+                if len(results) >= n:
+                    break
+        return results[:n]
 
     def mark_used(self, sticker_id: int):
         for s in self.stickers:
@@ -86,6 +112,18 @@ class StickerLibrary:
                 s["used_count"] = s.get("used_count", 0) + 1
                 self._save()
                 break
+
+    def remove(self, sticker_id: int) -> bool:
+        for s in self.stickers:
+            if s["id"] == sticker_id:
+                self.stickers.remove(s)
+                self._save()
+                try:
+                    self._get_vs().delete(str(sticker_id))
+                except Exception:
+                    pass
+                return True
+        return False
 
     def get_all(self) -> list[dict]:
         return list(self.stickers)
