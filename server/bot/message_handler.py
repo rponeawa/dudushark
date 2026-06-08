@@ -462,19 +462,27 @@ class MessageHandler:
                 lines.append(f"- {label}[{date}] {m['text'][:400]}")
             return "\n".join(lines)
 
-        # 个人记忆检索：群聊合并消息时检索所有说话人的记忆
+        # 个人记忆检索：群聊合并消息时按每人发言比例分配检索条数
         personal_memories = []
         seen_ids = set()
         if is_group and names_map:
+            # 统计每人发言条数
+            speaker_counts: dict[str, int] = {}
             for uid in names_map.values():
+                speaker_counts[uid] = speaker_counts.get(uid, 0) + 1
+            total_msgs = sum(speaker_counts.values())
+            total_budget = self.cfg.memory_retrieval_count
+            for uid, count in speaker_counts.items():
                 if uid not in seen_ids:
                     seen_ids.add(uid)
+                    # 按发言比例分配，最少 1 条
+                    n = max(1, round(total_budget * count / total_msgs))
                     personal_memories.extend(
-                        self.memory.recall_by_vector(uid, text, n=max(1, self.cfg.memory_retrieval_count // 2))
+                        self.memory.recall_by_vector(uid, text, n=n)
                     )
             # 去重 + 按分数排序
             personal_memories.sort(key=lambda x: x.get("score", 0), reverse=True)
-            personal_memories = personal_memories[:self.cfg.memory_retrieval_count]
+            personal_memories = personal_memories[:total_budget]
         else:
             personal_memories = self.memory.recall_by_vector(user_id, text, n=self.cfg.memory_retrieval_count)
         memories_text = _fmt_memories(personal_memories, show_user=is_group)
