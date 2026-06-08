@@ -1001,7 +1001,7 @@ class MessageHandler:
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
                 from server.bot.stickers import get_sticker_library
                 lib = get_sticker_library(self.bot_qq)
-                asyncio.create_task(_save_sticker_async(lib, save_s, self.bot_qq))
+                _do_save_sticker(lib, save_s, self.bot_qq)
             # 发送收藏的表情
             send_s = data.get("send_sticker")
             if send_s and isinstance(send_s, str) and send_s.strip():
@@ -1011,7 +1011,13 @@ class MessageHandler:
                 if matches:
                     s = matches[0]
                     lib.mark_used(s["id"])
-                    result.append(ReplyPart(f"[表情: {s['description']}]"))
+                    path = lib.get_path(s["id"])
+                    if path and path.exists():
+                        import base64 as _b64
+                        b64 = _b64.b64encode(path.read_bytes()).decode()
+                        result.append(ReplyPart(f"[CQ:image,file=base64://{b64}]"))
+                    else:
+                        logger.warning(f"[{self.bot_qq}] Sticker file missing: {s['id']}")
         else:
             reply_text = full_reply
             if reply_text.startswith(">>"):
