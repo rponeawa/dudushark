@@ -80,8 +80,8 @@ class DuduMood:
         if flavor:
             parts.append(flavor)
 
-        if not parts:
-            return ""
+        # 注入精力值，让 LLM 感知自己的状态
+        parts.append(f"当前精力: {round(self.energy * 100)}%")
 
         return "\n".join(parts)
 
