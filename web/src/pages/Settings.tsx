@@ -288,6 +288,50 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
             </div>
           </div>
 
+          <div className="section">
+            <h3>数据备份</h3>
+            <div className="row" style={{ gap: 12 }}>
+              <button className="btn-ghost" onClick={async () => {
+                const token = localStorage.getItem("token") || "";
+                try {
+                  const r = await fetch(`/api/instances/${activeQQ}/backup`, {
+                    headers: { "Authorization": `Bearer ${token}` },
+                  });
+                  if (!r.ok) { toast("导出失败", false); return; }
+                  const blob = await r.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = `dudushark-backup-${activeQQ}.zip`;
+                  a.click(); URL.revokeObjectURL(url);
+                  toast("导出成功");
+                } catch { toast("导出失败", false); }
+              }}>导出备份 (.zip)</button>
+              <label className="btn-ghost" style={{ cursor: "pointer", position: "relative" }}>
+                导入恢复
+                <input type="file" accept=".zip" style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!confirm("导入将合并聊天和记忆、覆盖配置，并重启服务。确定继续？")) return;
+                    const token = localStorage.getItem("token") || "";
+                    const form = new FormData();
+                    form.append("backup_file", file);
+                    try {
+                      const r = await fetch(`/api/instances/${activeQQ}/backup/restore`, {
+                        method: "POST",
+                        headers: { "Authorization": `Bearer ${token}` },
+                        body: form,
+                      });
+                      const d = await r.json();
+                      if (r.ok) toast(d.message || "恢复成功，服务重启中");
+                      else toast(d.detail || "恢复失败", false);
+                    } catch { toast("恢复失败", false); }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "保存中..." : "保存"}
           </button>

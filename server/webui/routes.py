@@ -14,7 +14,7 @@ from pathlib import Path
 
 import httpx
 import psutil
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -26,6 +26,7 @@ from server.config import (
     save_global_config,
     get_instance_config,
     save_instance_config,
+    get_instance_dir,
     LLMConfig,
 )
 from server.bot.onebot_handler import onebot_server
@@ -603,6 +604,106 @@ async def push_event(event: dict):
             dead.append(ws)
     for ws in dead:
         _widget_ws.remove(ws)
+
+
+# ---- 数据备份/恢复 ----
+
+@router.get("/instances/{qq}/backup")
+async def backup_data(qq: str):
+    """导出所有数据为 zip 文件。"""
+    import zipfile, io, os as _os
+    from fastapi.responses import StreamingResponse
+
+    data_dir = get_instance_dir(qq).parent.parent  # data/
+    env_file = Path(__file__).parent.parent.parent / ".env"
+    buf = io.BytesIO()
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in _os.walk(str(data_dir)):
+            dirs[:] = [d for d in dirs if d not in ("__pycache__",)]
+            for f in files:
+                fpath = Path(root) / f
+                arcname = str(fpath.relative_to(data_dir.parent))
+                zf.write(str(fpath), arcname)
+        if env_file.exists():
+            zf.write(str(env_file), ".env")
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=dudushark-backup-{qq}.zip"}
+    )
+
+
+@router.post("/instances/{qq}/backup/restore")
+async def restore_data(qq: str, backup_file: UploadFile = None):
+    """从 zip 恢复数据。聊天记录和记忆合并，配置覆盖。"""
+    import zipfile, io, os as _os
+    if not backup_file:
+        raise HTTPException(400, "请上传 zip 文件")
+    if not backup_file.filename or not backup_file.filename.endswith(".zip"):
+        raise HTTPException(400, "只支持 .zip 文件")
+
+    data_parent = get_instance_dir(qq).parent.parent.parent  # dudushark/
+    content = await backup_file.read()
+
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        for member in zf.namelist():
+            if member.startswith("/") or ".." in member or member.endswith("/"):
+                continue
+            target = data_parent / member
+
+            # 对话 JSONL：合并而非覆盖
+            if "/conversations/" in member and member.endswith(".jsonl"):
+                _merge_jsonl(target, zf, member)
+                continue
+
+            # 记忆 MD 文件：合并而非覆盖
+            if "/memories/" in member and member.endswith(".md"):
+                _merge_memory_md(target, zf, member)
+                continue
+
+            # 其他文件（配置、ChromaDB 等）：直接覆盖
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member) as src, open(str(target), "wb") as dst:
+                dst.write(src.read())
+
+    _os.system("sudo systemctl restart dudushark &")
+    return {"ok": True, "message": "数据已合并恢复，服务正在重启"}
+
+
+def _merge_jsonl(target: Path, zf, member: str):
+    """合并 JSONL 对话记录：追加备份中的新消息（按 ts 去重）。"""
+    import json as _json
+    existing_ts = set()
+    if target.exists():
+        for line in target.read_text(encoding="utf-8").splitlines():
+            try:
+                existing_ts.add(_json.loads(line.strip()).get("ts", 0))
+            except Exception:
+                pass
+    merged = []
+    if target.exists():
+        merged = target.read_text(encoding="utf-8").rstrip("\n").split("\n")
+    with zf.open(member) as src:
+        for line in src.read().decode("utf-8").splitlines():
+            try:
+                ts = _json.loads(line.strip()).get("ts", 0)
+                if ts not in existing_ts:
+                    merged.append(line.strip())
+                    existing_ts.add(ts)
+            except Exception:
+                pass
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(merged) + "\n", encoding="utf-8")
+
+
+def _merge_memory_md(target: Path, zf, member: str):
+    """合并记忆 MD 文件：备份中的内容如不存在则写入。"""
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(member) as src, open(str(target), "wb") as dst:
+            dst.write(src.read())
 
 
 # ---- 实时日志 WebSocket ----
