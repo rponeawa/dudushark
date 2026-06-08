@@ -46,19 +46,15 @@ class SiliconFlowEmbedding:
         if not input:
             return []
         try:
-            # 在线程池中执行同步 HTTP 请求，避免阻塞 asyncio 事件循环
-            import concurrent.futures
-            def _do_request():
-                return httpx.post(
-                    EMBEDDING_API_URL,
-                    json={"model": self.model, "input": input, "encoding_format": "float"},
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=30,
-                )
-            resp = concurrent.futures.ThreadPoolExecutor(max_workers=1).submit(_do_request).result(timeout=35)
+            resp = httpx.post(
+                EMBEDDING_API_URL,
+                json={"model": self.model, "input": input, "encoding_format": "float"},
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=15,
+            )
             if resp.status_code != 200:
                 _EMBED_FAIL_COUNT += 1
                 if _EMBED_FAIL_COUNT <= 3 or _EMBED_FAIL_COUNT % 20 == 0:
