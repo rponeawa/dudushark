@@ -719,8 +719,32 @@ class MessageHandler:
         try:
             response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
         except Exception as e:
-            logger.error(f"LLM 调用最终失败: {e}")
-            return []
+            err = str(e)
+            if "451" in err or "censorship" in err.lower():
+                # 审查拦截：移除最近一条用户消息后重试一次
+                logger.warning(f"[{self.bot_qq}] LLM 451 censorship, removing last user msg and retrying")
+                key = self._conv_key(user_id, group_id)
+                # 从上下文列表中移除最后一条 user 消息
+                for i in range(len(messages) - 1, -1, -1):
+                    if messages[i].get("role") == "user":
+                        removed = messages.pop(i)
+                        logger.info(f"[{self.bot_qq}] 451 cleanup: removed user msg [{removed.get('content', '')[:60]}]")
+                        break
+                # 从持久化历史中移除最后一条 user 消息
+                conv = self._conversations.get(key, [])
+                for i in range(len(conv) - 1, -1, -1):
+                    if conv[i].get("role") == "user":
+                        conv.pop(i)
+                        self._persist_convo(key)
+                        break
+                try:
+                    response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
+                except Exception as e2:
+                    logger.error(f"[{self.bot_qq}] LLM retry after 451 also failed: {e2}")
+                    return []
+            else:
+                logger.error(f"LLM 调用最终失败: {e}")
+                return []
 
         # 函数调用循环：LLM 请求搜索 → 先说一句话 → 后台搜索+LLM+发结果
         tool_calls = response_msg.get("tool_calls", [])
