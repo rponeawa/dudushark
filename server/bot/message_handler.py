@@ -1050,6 +1050,8 @@ class MessageHandler:
             want_quote = True
             reply_text = reply_text[2:].strip()
 
+        logger.info(f"[{self.bot_qq}] After sticker: reply_text={reply_text[:50]!r}, result={len(result)} parts")
+
         if not reply_text or reply_text.strip() == "[SKIP]":
             logger.info(f"[{self.bot_qq}] Reply is SKIP/empty, result has {len(result)} parts")
             return result if result else []
