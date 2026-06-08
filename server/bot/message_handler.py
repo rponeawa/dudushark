@@ -1110,7 +1110,9 @@ class MessageHandler:
                 qid = quote_msg_id if (want_quote and i == 0 and quote_msg_id) else None
                 result.append(ReplyPart(part, qid))
                 self._append_history(user_id, "assistant", part, group_id)
-        return existing + result
+        final = existing + result
+        logger.info(f"[{self.bot_qq}] _handle_impl returning {len(final)} parts: {[p.text[:40] for p in final]}")
+        return final
 
     async def _fallback_memory(self, user_id: str, user_name: str, message: str, reply: str):
         """JSON 解析失败时的记忆兜底提取。"""
