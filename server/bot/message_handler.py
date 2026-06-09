@@ -685,9 +685,9 @@ class MessageHandler:
             relay_example = ""
             if len(admin_roles) >= 2:
                 a, b = admin_roles[0], admin_roles[1]
-                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}说明天去看你\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}}}}"
+                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}让鱼告诉你，她明天去看你～\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}}}}"
             messages.append({"role": "system", "content": (
-                f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。\n"
+                f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。content 就是你要发给对方的话，自然地表达「有人托鱼转达」的意思，不要用固定模板。\n"
                 "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}\n"
                 "delay_minutes: 延迟多少分钟再发送。根据传话者的话来判断——\"半小时后告诉她\"就是30，\"明天再说\"就是到明天早上的分钟数，没提到延迟就填1。最少1分钟。填数字，别填null。\n"
                 "voice: 转达时也可以发语音。大部分时候null。对方要求发语音、撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n" +
@@ -1510,8 +1510,7 @@ class MessageHandler:
 
     async def _send_stored_relay(self, pending: dict):
         """实际发送一条 pending relay。"""
-        from_label = f"【{pending['from_role']}】" if pending['from_role'] else "管理员"
-        relay_text = f"{from_label}让鱼转达：{pending['content']}"
+        relay_text = pending['content']
         relay_voice = pending.get("voice")
         relay_voice_emotion = str(pending.get("voice_emotion", "") or "").strip()
         target_qq = pending["to_user_id"]
