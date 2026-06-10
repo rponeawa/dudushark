@@ -688,7 +688,7 @@ class MessageHandler:
                 a, b = admin_roles[0], admin_roles[1]
                 relay_example = f"例-{a}说\"帮我跟{b}说晚安\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}让鱼跟你说晚安～\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1,\"sticker\":\"晚安\"}}}}"
             messages.append({"role": "system", "content": (
-                f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。content 就是你要发给对方的话，自然地表达「有人托鱼转达」的意思，不要用固定模板。\n"
+                f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。content 就是你要发给对方的话。可以提是谁让转达的，也可以完全以自己的口吻说（比如对方让鱼跟人说晚安，鱼可以直接说「晚安～」而不提是谁让说的）。看情况自然决定。\n"
                 "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1,\"sticker\":null}\n"
                 "sticker: 选填，发收藏的表情包关键词（如\"晚安\"），系统会自动匹配。不需要就null。\n"
                 "delay_minutes: 延迟多少分钟再发送。根据传话者的话来判断——\"半小时后告诉她\"就是30，\"明天再说\"就是到明天早上的分钟数，没提到延迟就填1。最少1分钟。填数字，别填null。\n"
