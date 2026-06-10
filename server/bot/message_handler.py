@@ -1558,15 +1558,12 @@ class MessageHandler:
                     await client.send_private_voice(target_qq, docker_path)
                     await asyncio.sleep(1.0)
 
-        # 文字部分分段发送
-        for i, part in enumerate(parts):
-            if relay_voice == "all":
-                break
-            if relay_voice == "last" and i == len(parts) - 1:
-                break
-            await client.send_private_msg(target_qq, part)
-            if i < len(parts) - 1:
-                await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+        # 文字部分分段发送（voice=all/last 已在上面处理，这里只发无语音或 already-sent 的补充）
+        if not relay_voice:
+            for i, part in enumerate(parts):
+                await client.send_private_msg(target_qq, part)
+                if i < len(parts) - 1:
+                    await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
 
         # 如果有表情包，独立发送
         relay_sticker = pending.get("sticker")
