@@ -686,10 +686,11 @@ class MessageHandler:
             relay_example = ""
             if len(admin_roles) >= 2:
                 a, b = admin_roles[0], admin_roles[1]
-                relay_example = f"例-{a}说\"帮我告诉{b}明天去看她\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}让鱼告诉你，她明天去看你～\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}}}}"
+                relay_example = f"例-{a}说\"帮我跟{b}说晚安\"→{{\"reply\":\"好的～\",\"relay\":{{\"to_role\":\"{b}\",\"content\":\"{a}让鱼跟你说晚安～\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1,\"sticker\":\"晚安\"}}}}"
             messages.append({"role": "system", "content": (
                 f"转达消息用 relay。可转达: {role_list}。to_role 必须严格匹配以上角色名。content 就是你要发给对方的话，自然地表达「有人托鱼转达」的意思，不要用固定模板。\n"
-                "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1}\n"
+                "格式: {\"to_role\":\"角色名\",\"content\":\"转达内容\",\"voice\":null,\"voice_emotion\":null,\"delay_minutes\":1,\"sticker\":null}\n"
+                "sticker: 选填，发收藏的表情包关键词（如\"晚安\"），系统会自动匹配。不需要就null。\n"
                 "delay_minutes: 延迟多少分钟再发送。根据传话者的话来判断——\"半小时后告诉她\"就是30，\"明天再说\"就是到明天早上的分钟数，没提到延迟就填1。最少1分钟。填数字，别填null。\n"
                 "voice: 转达时也可以发语音。大部分时候null。对方要求发语音、撒娇卖萌、传的话本身很甜/很暖时偶尔发\"last\"，极少\"all\"。\n" +
                 (f"{relay_example}\n" if relay_example else "") +
@@ -1481,6 +1482,7 @@ class MessageHandler:
 
             relay_voice = relay.get("voice")
             relay_voice_emotion = str(relay.get("voice_emotion", "") or "").strip()
+            relay_sticker = relay.get("sticker")
 
             pending = {
                 "id": uuid.uuid4().hex[:8],
@@ -1491,6 +1493,7 @@ class MessageHandler:
                 "content": content,
                 "voice": relay_voice,
                 "voice_emotion": relay_voice_emotion,
+                "sticker": relay_sticker if isinstance(relay_sticker, str) else None,
                 "send_at": send_at,
                 "created_at": now,
             }
@@ -1564,6 +1567,23 @@ class MessageHandler:
             await client.send_private_msg(target_qq, part)
             if i < len(parts) - 1:
                 await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+
+        # 如果有表情包，独立发送
+        relay_sticker = pending.get("sticker")
+        if relay_sticker and isinstance(relay_sticker, str) and relay_sticker.strip():
+            import base64 as _b64
+            from server.bot.stickers import get_sticker_library
+            lib = get_sticker_library(self.bot_qq)
+            matches = await lib.search(relay_sticker.strip(), n=1)
+            if matches:
+                s = matches[0]
+                lib.mark_used(s["id"])
+                path = lib.get_path(s["id"])
+                if path and path.exists():
+                    b64 = _b64.b64encode(path.read_bytes()).decode()
+                    await asyncio.sleep(1.0)
+                    await client.send_private_msg(target_qq, f"[CQ:image,file=base64://{b64}]")
+                    logger.info(f"[{self.bot_qq}] Relay sticker sent: {s['description']}")
 
         logger.info(f"[{self.bot_qq}] Relay sent: {pending['from_role']}->{pending['to_role']} id={pending['id']}")
         try:
