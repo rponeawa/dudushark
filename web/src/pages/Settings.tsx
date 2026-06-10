@@ -220,18 +220,6 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
           </div>
 
           <div className="section">
-            <div className="section-title">管理员描述 (admins_description)</div>
-            <div className="form-group">
-              <textarea
-                value={cfg.admins_description || ""}
-                onChange={(e) => setCfg({ ...cfg, admins_description: e.target.value })}
-                rows={4}
-                placeholder="注入 system prompt 的管理员描述"
-              />
-            </div>
-          </div>
-
-          <div className="section">
             <div className="section-title">家族记忆 (family_memory)</div>
             <div className="form-group">
               <textarea
@@ -248,6 +236,18 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                 onChange={(e) => setCfg({ ...cfg, family_note: e.target.value })}
                 rows={3}
                 placeholder="伴随家族记忆的提示词"
+              />
+            </div>
+          </div>
+
+          <div className="section">
+            <div className="section-title">管理员描述 (admins_description)</div>
+            <div className="form-group">
+              <textarea
+                value={cfg.admins_description || ""}
+                onChange={(e) => setCfg({ ...cfg, admins_description: e.target.value })}
+                rows={4}
+                placeholder="注入 system prompt 的管理员描述"
               />
             </div>
           </div>
