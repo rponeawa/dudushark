@@ -290,8 +290,8 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
 
           <div className="section">
             <h3>数据备份</h3>
-            <div className="row" style={{ gap: 12 }}>
-              <button className="btn-ghost" onClick={async () => {
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <button className="btn btn-ghost" onClick={async () => {
                 const token = localStorage.getItem("token") || "";
                 try {
                   const r = await fetch(`/api/instances/${activeQQ}/backup`, {
