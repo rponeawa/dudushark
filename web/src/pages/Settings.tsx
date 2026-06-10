@@ -306,8 +306,8 @@ export default function Settings({ instances, activeQQ, setActiveQQ }: Props) {
                   toast("导出成功");
                 } catch { toast("导出失败", false); }
               }}>导出备份 (.zip)</button>
-              <label className="btn-ghost" style={{ cursor: "pointer", position: "relative" }}>
-                导入恢复
+              <label className="btn btn-ghost" style={{ cursor: "pointer", position: "relative" }}>
+                导入恢复 (.zip)
                 <input type="file" accept=".zip" style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
