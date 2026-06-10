@@ -12,7 +12,7 @@ export default function PausedGroupsPage({ activeQQ }: Props) {
   const [groups, setGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [pausedUsers, setPausedUsers] = useState<Record<string, number>>({});
-  const token = localStorage.getItem("token") || "";
+  const token = localStorage.getItem("dudushark_token") || "";
 
   const load = async () => {
     if (!activeQQ) return;

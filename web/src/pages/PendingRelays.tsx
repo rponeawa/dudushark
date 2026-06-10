@@ -15,7 +15,7 @@ export default function PendingRelaysPage({ activeQQ }: Props) {
     if (!activeQQ) return;
     setLoading(true);
     try {
-      const t = localStorage.getItem("token") || "";
+      const t = localStorage.getItem("dudushark_token") || "";
       const r = await fetch(`/api/instances/${activeQQ}/pending_relays`, {
         headers: { "Authorization": `Bearer ${t}` },
       });
@@ -28,7 +28,7 @@ export default function PendingRelaysPage({ activeQQ }: Props) {
 
   const cancelRelay = async (id: string) => {
     if (!confirm("取消这条代传话？")) return;
-    const t = localStorage.getItem("token") || "";
+    const t = localStorage.getItem("dudushark_token") || "";
     await fetch(`/api/instances/${activeQQ}/pending_relays/${id}`, {
       method: "DELETE", headers: { "Authorization": `Bearer ${t}` },
     });
