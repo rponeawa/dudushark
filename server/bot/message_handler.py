@@ -466,8 +466,17 @@ class MessageHandler:
                         date = f"{parts[1]}-{parts[2]} {t.split(':')[0]}:{t.split(':')[1]}"
                 except Exception:
                     pass
-                owner = m.get("meta", {}).get("user", "")
-                label = f"[{owner}] " if show_user and owner else ""
+                owner_id = m.get("meta", {}).get("user", "")
+                label = ""
+                if show_user and owner_id:
+                    name = (names_map or {}).get(owner_id, "")
+                    if not name:
+                        # 检查 admins 里的角色名
+                        for a in self.cfg.admins:
+                            if str(a.get("qq", "")) == owner_id:
+                                name = a.get("role", owner_id)
+                                break
+                    label = f"[{name or owner_id}] "
                 lines.append(f"- {label}[{date}] {m['text'][:400]}")
             return "\n".join(lines)
 
