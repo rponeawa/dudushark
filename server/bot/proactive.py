@@ -355,14 +355,22 @@ class ProactiveScheduler:
         path.write_text(json.dumps(posts, ensure_ascii=False, indent=2))
 
     async def _check_qzone_post(self):
-        """检查是否需要发空间说说。每天清醒时段随机触发一次。"""
+        """检查是否需要发空间说说。必须当天有全局记忆才发。"""
         if not self._cfg.qzone_enabled:
             return
         if self._qzone_posted_today():
             return
         if self._is_sleep_time():
             return
-        # 10% 概率触发（多次 cycle 后大概率命中）
+
+        handler = get_message_handler(self.bot_qq)
+        today_diary = handler.memory.recall_by_date("__diary__", self._today_str())
+        # 过滤掉之前发过的说说条目
+        today_diary = [d for d in today_diary if "类型: 空间说说" not in d.get("text", "")]
+        if not today_diary:
+            return  # 没有今天的全局记忆，不发
+
+        # 10% 概率触发
         if random.random() > 0.10:
             return
 
