@@ -120,7 +120,7 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 每次 API 调用都重新获取 Cookie 避免过期
 - 发帖：POST `emotion_cgi_publish_v6`，读取：GET `emotion_cgi_msglist_v6`
 - **管理员触发发帖**：管理员消息含"空间/说说/动态"关键词 → 注入 qzone JSON 字段 → 主 LLM 自行判断是否填内容 → 独立 LLM 二次验证（`_should_post_qzone`）→ 通过后异步发帖
-- **每日自动发帖**：清醒时段（8-21点）10% 概率触发，内容基于当天 diary 记忆，无则随机
+- **每日自动发帖**：清醒时段（8-21点）10% 概率触发，必须当天有至少一条全局记忆才发，无则跳过
 - 发帖记录保存在 `data/instances/{qq}/qzone_posts.json`，最多 200 条
 - 发帖状态（当天是否已发）保存在 `data/instances/{qq}/qzone_state.json`
 - WebUI 可手动触发发帖（自动生成内容）并查看历史
@@ -139,13 +139,20 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 21:00-23:00 固定犯困，23:00-08:00 固定睡着（energy 5-8%）
 - 08:00-21:00 清醒，10% 概率随机犯困，醒来后 energy×2
 - `system_mood_context()` 注入系统 prompt
+- LLM 温度联动：睡着 +0.2、犯困 +0.1、生气 +0.3×强度
+- 早上 8 点醒来 → 情绪重置为开心 50%
 - 前端实时显示睡眠状态 + 精力条（最高 100%）
 
 **情绪系统：**
-- `DuduEmotion` 单例，独立于心情/睡眠。一次只有一种情绪 + 百分比（如"生气 60%"）
-- LLM 输出 `emotion` 字段（如 `"生气"`），系统管理强度和平滑过渡（~2 tick 完成切换）
-- 自然衰减：每次 tick 向 30% 基线靠拢。情绪不变时 LLM 不输出
+- `DuduEmotion` 单例，独立于心情/睡眠。一次只有一种情绪 + 百分比（5 种：开心/生气/难过/撒娇/平静）
+- LLM 输出 `emotion` 字段（如 `"生气"`），系统管理强度和平滑过渡
+- 生气衰减更快（6%/tick vs 3%），不记仇
 - 注入 system prompt，前端状态页显示情绪+进度条
+
+**群聊免打扰：**
+- 仅睡眠时段注入 `mute_groups` 提示词。LLM 被吵醒生气时可输出 `mute_groups: true`
+- 系统暂停当前群到明天 8 点，早上自动解冻。WebUI「免打扰」tab 可管理
+- 免打扰期间消息仍落盘，但不调 LLM
 
 **表情包收藏：**
 - `StickerLibrary` 管理收藏的表情包，图片下载落盘（QQ URL 会过期），MD5 去重
@@ -166,16 +173,22 @@ NapCatQQ (Docker: mlikiowa/napcat-docker)
 - 有提醒时不创建记忆（避免重复存储）
 
 **管理员群聊控制：**
-- `/pause` — 群内管理员发送，暂停该群消息处理（不 LLM、不落盘）
-- `/resume` — 仅在暂停状态下由管理员发送，恢复消息处理
-- 暂停期间除 `/resume` 外所有消息静默忽略
+- `/pause` — 群内管理员发送，即时处理不等合并窗口，暂停该群消息处理（不 LLM，但仍落盘）
+- `/resume` — 仅在暂停状态下由管理员发送，即时恢复消息处理
+- 暂停/免打扰期间消息落盘但 LLM 看不到
 
 **管理员代传话：**
 - 主 LLM 输出 relay → 独立 LLM 验证（无上文，只看原始消息）→ 30s 去重
 - **延迟发送**：按传话者要求延迟（最少1分钟），LLM 提取 delay_minutes，系统计算 send_at，后台定时检查
 - pending 代传话存储在 `pending_relays.json`，WebUI 可查看和取消
 - 仅管理员私聊可用，群聊完全不注入 relay 指令
+- relay content 由 LLM 自由发挥，不加固定前缀。可选语音和表情包
 - 家族记忆仅 role 含"妈"的成员在私聊中注入
+
+**主动消息暂停：**
+- LLM 输出 `pause_proactive: "明天早上"` 暂停对某用户的主动消息
+- 系统解析自然语言时间（明天早上/2小时后/今晚等），LLM 不接触时间戳
+- 暂停期间该用户不会被选为主动消息目标。WebUI「暂停」tab 可管理
 
 **Prompt 缓存优化：**
 - 消息顺序：[0]persona(固定→缓存命中) [1]json_prompt(静态，时间已分离) [2]当前时间(独立消息) [3]mood [4]family [5]diary [6]group [7]memories [8]family_note [9]relay [10+]history → user_msg
