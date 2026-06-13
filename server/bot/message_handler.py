@@ -659,7 +659,7 @@ class MessageHandler:
         )
         # 睡眠时段注入群聊免打扰提示
         if mood.sleep_state == "sleeping" and is_group:
-            json_prompt += "\n- mute_groups: 你正在睡觉被吵醒了。只有对方是故意找你/叫你/烦你（@鱼、戳一戳、连续刷屏喊鱼）才填true。普通群聊噪音不算，不要因为大家随便聊两句就生气。平时留null。"
+            json_prompt += "\n- mute_groups: 你正在睡觉被群里消息吵醒了。可以填true开启免打扰暂停本群到明早8点。普通群聊噪音也会填，但不代表你生气了——只是想继续睡。只有对方故意找你/叫你/烦你（@鱼、戳一戳、刷屏喊鱼）才在emotion里填生气。平时留null。"
 
         # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
         if _qzone_keyword:
