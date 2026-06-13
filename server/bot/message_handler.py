@@ -647,7 +647,7 @@ class MessageHandler:
         )
         # 睡眠时段注入群聊免打扰提示
         if mood.sleep_state == "sleeping" and is_group:
-            json_prompt += "\n- mute_groups: 你正在睡觉被吵醒了。如果很生气，填true开启群聊免打扰，系统暂停所有群到明早8点。不生气就null。"
+            json_prompt += "\n- mute_groups: 你正在睡觉被吵醒了。如果很生气，填true开启这个群的免打扰，系统暂停本群到明早8点。不生气就null。"
 
         # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
         if _qzone_keyword:
@@ -1135,10 +1135,12 @@ class MessageHandler:
             pp = data.get("pause_proactive")
             if pp and isinstance(pp, str) and pp.strip():
                 self._pause_proactive_for(user_id, pp.strip())
-            # 群聊免打扰（仅睡眠时段生效）
+            # 群聊免打扰（仅睡眠时段、当前群）
             mg = data.get("mute_groups")
-            if mg is True and is_group and get_mood(self.bot_qq).sleep_state == "sleeping":
-                asyncio.create_task(self._mute_all_groups())
+            if mg is True and is_group and group_id and get_mood(self.bot_qq).sleep_state == "sleeping":
+                self._paused_groups.add(group_id)
+                self._save_paused_groups()
+                logger.info(f"[{self.bot_qq}] Group {group_id} muted (sleep+angry)")
             # 收藏表情包
             save_s = data.get("save_sticker")
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
