@@ -366,6 +366,15 @@ class MessageHandler:
     ) -> list[ReplyPart]:
         """统一入口。返回 ReplyPart 列表，每个可带引用消息 ID。"""
         is_group = bool(group_id)
+
+        # /pause /resume 即时处理，不等待合并窗口
+        if is_group and ("/pause" in text or "/resume" in text):
+            replies = await self._handle_impl(
+                user_id, user_name, text, group_id, msg_type, "",
+                None, images or [], [], image_infos or [],
+            )
+            return replies or []
+
         conv_key = self._conv_key(user_id, group_id)
         # 群聊合并所有说话人，私聊只合并同一人
         buf_key = (conv_key, user_name) if not is_group else (conv_key,)
