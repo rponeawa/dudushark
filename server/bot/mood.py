@@ -194,6 +194,7 @@ class DuduMood:
             h = get_message_handler(self.bot_qq)
             h.unpause_proactive("__all_groups__")
             h._muted_groups.clear()
+            h._save_muted_groups()
         except Exception:
             pass
 

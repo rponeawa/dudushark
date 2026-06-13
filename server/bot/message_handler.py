@@ -168,6 +168,7 @@ class MessageHandler:
         self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
         self._paused_groups: set[str] = set(self.cfg.paused_groups or [])  # 管理员 /pause 暂停的群（不落盘）
         self._muted_groups: set[str] = set()  # 睡觉被吵醒自动免打扰的群（落盘但不 LLM）
+        self._load_muted_groups()
         self._lock = asyncio.Lock()
         self._buffers: dict[tuple[str, str], dict] = {}
         self._last_combined: dict[str, str] = {}
@@ -187,6 +188,23 @@ class MessageHandler:
             save_instance_config(self.cfg)
         except Exception:
             pass
+
+    def _muted_groups_path(self):
+        from server.config import get_instance_dir
+        return get_instance_dir(self.bot_qq) / "muted_groups.json"
+
+    def _load_muted_groups(self):
+        path = self._muted_groups_path()
+        if path.exists():
+            try:
+                self._muted_groups = set(json.loads(path.read_text(encoding="utf-8")))
+            except Exception:
+                self._muted_groups = set()
+
+    def _save_muted_groups(self):
+        path = self._muted_groups_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(sorted(self._muted_groups), ensure_ascii=False, indent=2))
 
     def _conv_key(self, user_id: str, group_id: str = "") -> str:
         # 群聊所有用户共享对话历史，私聊各自独立
@@ -287,6 +305,7 @@ class MessageHandler:
         group_keys = [k for k, t in self._convo_types.items() if t == "group"]
         for gid in group_keys:
             self._muted_groups.add(gid)
+        self._save_muted_groups()
         self._set_proactive_pause("__all_groups__", until)
         logger.info(f"[{self.bot_qq}] All groups muted until {wake.strftime('%H:%M')}")
 
@@ -1151,6 +1170,7 @@ class MessageHandler:
             mg = data.get("mute_groups")
             if mg is True and is_group and group_id and get_mood(self.bot_qq).sleep_state == "sleeping":
                 self._muted_groups.add(group_id)
+                self._save_muted_groups()
                 logger.info(f"[{self.bot_qq}] Group {group_id} muted (sleep+angry)")
             # 收藏表情包
             save_s = data.get("save_sticker")
