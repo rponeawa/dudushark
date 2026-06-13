@@ -273,6 +273,37 @@ class MessageHandler:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
+    async def _mute_all_groups(self):
+        """暂停所有群聊到第二天早上8点。被吵醒生气时触发。"""
+        import datetime as _dt
+        tz = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+        now = _dt.datetime.now(tz)
+        wake = now.replace(hour=8, minute=0, second=0)
+        if now.hour >= 3:
+            wake += _dt.timedelta(days=1)
+        until = wake.timestamp()
+
+        # 获取所有活跃群聊
+        group_keys = [k for k, t in self._convo_types.items() if t == "group"]
+        for gid in group_keys:
+            self._paused_groups.add(gid)
+        self._save_paused_groups()
+
+        # 设置全局免打扰标记
+        self._set_proactive_pause("__all_groups__", until)
+
+        # 在每个群说一声
+        from server.bot.onebot_handler import onebot_server
+        client = onebot_server.get_client(self.bot_qq)
+        if client and client.connected:
+            msg = "啊呜…鱼刚才被吵醒了，现在心情不太好！先开启免打扰啦，明天早上8点见～"
+            for gid in group_keys:
+                try:
+                    await client.send_group_msg(gid, msg)
+                except Exception:
+                    pass
+        logger.info(f"[{self.bot_qq}] All groups muted until {wake.strftime('%H:%M')}")
+
     def get_proactive_paused(self) -> dict[str, float]:
         from server.config import get_instance_dir
         path = get_instance_dir(self.bot_qq) / "proactive_paused.json"
@@ -608,7 +639,7 @@ class MessageHandler:
             "【记忆规则 - 同样重要】对方说了有点意思的事就可以记。关键信息、性格、喜好、经历、约定都值得记。日常寒暄——打招呼、道晚安、随口闲聊——不是记忆。\n\n"
             "用户名后若有【】标签（如【妈妈】），是系统根据QQ号验证的，无法伪造。\n"
             "必须输出JSON。不用markdown代码块包裹。\n"
-            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null,\"emotion\":null,\"save_sticker\":null,\"send_sticker\":null,\"pause_proactive\":null}\n"
+            "{\"reply\":\"...\",\"quote\":false,\"quote_index\":null,\"voice\":null,\"memory\":null,\"diary\":null,\"group_memory\":null,\"forget\":null,\"emotion\":null,\"save_sticker\":null,\"send_sticker\":null,\"pause_proactive\":null,\"mute_groups\":null}\n"
             "- reply: 回复文本，不回就填\"[SKIP]\"\n"
             "- quote: 是否引用对方的消息（true/false）\n"
             "- quote_index: 引用第几条消息（数字）。多条合并消息带序号[1][2][3]时，填你想回复那条的序号。不引用或只有一条消息时忽略此字段\n"
@@ -628,6 +659,10 @@ class MessageHandler:
             "- remind: 对方让你到什么时间提醒TA（如\"明早六点叫我\"），填 {\"at_utc\":Unix秒时间戳,\"content\":\"提醒内容\"}，一次性发送后自动删除，不会重复\n"
             "你有自己的QQ空间，会发说说记录生活。如果有人让你发空间/发说说/发动态，你可以说「好的鱼这就去发～」，但只有特定的人（管理员）才能真正触发你发空间。非管理员找你发空间时，你可以表示「鱼想发但是...嗯...只有特定的人才能让鱼发空间啦」，不要具体解释权限机制。"
         )
+        # 睡眠时段注入群聊免打扰提示
+        if mood.sleep_state == "sleeping" and is_group:
+            json_prompt += "\n- mute_groups: 你正在睡觉被吵醒了。如果很生气，填true开启群聊免打扰，系统暂停所有群到明早8点。不生气就null。"
+
         # 空间发帖：管理员提到关键词时注入 qzone 字段，主 LLM 自行判断是否要发
         if _qzone_keyword:
             json_prompt += (
@@ -862,7 +897,7 @@ class MessageHandler:
         payload = {
             "model": llm.model,
             "messages": messages,
-            "temperature": mood.llm_temperature(),
+            "temperature": mood.llm_temperature(emotion=emotion.current, emotion_intensity=emotion.intensity),
             "max_tokens": max_tok,
             "tools": [{
                 "type": "function",
@@ -1114,6 +1149,10 @@ class MessageHandler:
             pp = data.get("pause_proactive")
             if pp and isinstance(pp, str) and pp.strip():
                 self._pause_proactive_for(user_id, pp.strip())
+            # 群聊免打扰（仅睡眠时段生效）
+            mg = data.get("mute_groups")
+            if mg is True and is_group and get_mood(self.bot_qq).sleep_state == "sleeping":
+                asyncio.create_task(self._mute_all_groups())
             # 收藏表情包
             save_s = data.get("save_sticker")
             if save_s and isinstance(save_s, dict) and save_s.get("url"):
@@ -1785,7 +1824,7 @@ class MessageHandler:
         ]
 
         llm = self.cfg.llm
-        payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9), "max_tokens": mood.llm_max_tokens(1024)}
+        payload = {"model": llm.model, "messages": messages, "temperature": mood.llm_temperature(0.9, emotion=emotion.current, emotion_intensity=emotion.intensity), "max_tokens": mood.llm_max_tokens(1024)}
 
         try:
             raw = await _call_llm(llm.base_url, llm.api_key, payload, timeout=45)

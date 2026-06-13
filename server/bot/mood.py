@@ -58,8 +58,21 @@ class DuduMood:
         """How likely Dudu is to speak (0.0–1.0+). Used by proactive scheduler."""
         return self.energy
 
-    def llm_temperature(self, base: float = 0.85) -> float:
-        return base
+    def llm_temperature(self, base: float = 0.85, emotion: str = "", emotion_intensity: float = 0.0) -> float:
+        t = base
+        # 困/睡着 → 温度升高（更随性、可能暴躁）
+        if self.sleep_state == "sleeping":
+            t += 0.2
+        elif self.sleep_state == "sleepy":
+            t += 0.1
+        # 情绪影响
+        if emotion == "生气":
+            t += emotion_intensity * 0.3
+        elif emotion == "撒娇":
+            t += emotion_intensity * 0.1
+        elif emotion == "开心":
+            t += emotion_intensity * 0.05
+        return min(1.5, t)
 
     def llm_max_tokens(self, base: int = 4096) -> int:
         if self.sleep_state == "sleepy":
@@ -143,11 +156,12 @@ class DuduMood:
         self._offset_until = now + random.randint(7200, 14400)
 
     def _tick_sleep(self, now: float):
-        # 过了 8 点还没醒 → 强制醒来
+        # 过了 8 点还没醒 → 强制醒来，重置情绪
         if self.sleep_state == "sleeping":
             if self._hour() >= 8:
                 self.sleep_state = "just_woke"
                 self.sleep_state_until = now + random.randint(180, 480)
+                self._wake_up_reset()
             return
 
         if now < self.sleep_state_until:
@@ -163,6 +177,28 @@ class DuduMood:
         elif self.sleep_state == "just_woke":
             self.sleep_state = "awake"
             self.sleep_state_until = now + random.randint(3600, 7200)
+
+    def _wake_up_reset(self):
+        """醒来时重置情绪为开心，解冻免打扰。"""
+        try:
+            from server.bot.emotion import get_emotion
+            e = get_emotion(self.bot_qq)
+            e.current = "开心"
+            e.intensity = 0.5
+            e._save()
+        except Exception:
+            pass
+        # 解冻群聊免打扰
+        try:
+            from server.bot.message_handler import get_message_handler
+            h = get_message_handler(self.bot_qq)
+            h.unpause_proactive("__all_groups__")
+            # 清除所有暂停的群
+            for gid in list(h._paused_groups):
+                h._paused_groups.discard(gid)
+            h._save_paused_groups()
+        except Exception:
+            pass
 
     def _sleep_modifier(self) -> float:
         if self.sleep_state == "sleeping":

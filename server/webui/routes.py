@@ -363,7 +363,7 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
 @router.get("/instances/{qq}/proactive_paused")
 async def list_proactive_paused(qq: str):
     handler = get_message_handler(qq)
-    return {"paused": handler.get_proactive_paused()}
+    return {"paused": handler.get_proactive_paused(), "paused_groups": list(handler._paused_groups)}
 
 
 @router.delete("/instances/{qq}/proactive_paused/{user_id}")
@@ -371,6 +371,15 @@ async def unpause_proactive(qq: str, user_id: str):
     handler = get_message_handler(qq)
     handler.unpause_proactive(user_id)
     return {"ok": True}
+
+
+@router.post("/instances/{qq}/mute_groups")
+async def toggle_group_mute(qq: str):
+    """手动切换群聊免打扰。"""
+    import asyncio
+    handler = get_message_handler(qq)
+    await handler._mute_all_groups()
+    return {"ok": True, "message": "已开启群聊免打扰"}
 
 
 # ---- 表情包收藏 ----
