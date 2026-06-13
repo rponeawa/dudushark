@@ -538,16 +538,16 @@ class MessageHandler:
         # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
         is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
 
-        # 群聊暂停/恢复：被暂停的群直接跳过，不落盘
+        # 群聊暂停/恢复：被暂停的群不调 LLM，但消息仍落盘
         if is_group and group_id in self._paused_groups:
+            # 消息落盘（不回复，但保留记录）
+            self._append_history(user_id, "user", text, group_id)
             logger.info(f"[{self.bot_qq}] Group {group_id} is paused, checking /resume: admin={is_sender_admin}, text={text[:80]}")
-            # 检查是否是管理员发的 /resume（可能带回复/@前缀）
             if is_sender_admin and "/resume" in text:
                 self._paused_groups.discard(group_id)
                 self._save_paused_groups()
                 logger.info(f"[{self.bot_qq}] Group {group_id} resumed by admin {user_id}")
                 return [ReplyPart("啊呜～鱼回来啦！有什么好玩的事吗？")]
-            # 其他消息全部忽略，不落盘
             return []
 
         # /pause 命令：管理员暂停群聊（可能带回复/@前缀）
