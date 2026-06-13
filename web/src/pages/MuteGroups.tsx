@@ -41,7 +41,7 @@ export default function MuteGroupsPage({ activeQQ }: Props) {
           </div>
         </div>
         <p className="text-dim" style={{ marginBottom: 16 }}>
-          嘟嘟睡觉时被吵醒生气会自动开启免打扰。早上8点自动恢复。
+          睡眠时段被群消息吵醒时自动开启免打扰，消息仍落盘但不回复。早上8点自动恢复。
         </p>
         {loading ? <p className="text-dim">加载中...</p> : muted.length === 0 ? (
           <p className="text-dim" style={{ padding: 12 }}>暂无被免打扰的群聊</p>
