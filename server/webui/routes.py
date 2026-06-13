@@ -363,7 +363,7 @@ async def qzone_manual_post(qq: str, body: QzonePostBody | None = None):
 @router.get("/instances/{qq}/proactive_paused")
 async def list_proactive_paused(qq: str):
     handler = get_message_handler(qq)
-    return {"paused": handler.get_proactive_paused(), "paused_groups": list(handler._paused_groups)}
+    return {"paused": handler.get_proactive_paused(), "paused_groups": list(handler._paused_groups), "muted_groups": list(handler._muted_groups)}
 
 
 @router.delete("/instances/{qq}/proactive_paused/{user_id}")

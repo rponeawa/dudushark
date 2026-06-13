@@ -166,7 +166,8 @@ class MessageHandler:
         self.ctx = ContextManager(max_tokens=self.cfg.context_max_tokens)
         self._conversations: dict[str, list[dict]] = {}
         self._convo_types: dict[str, str] = {}  # key -> "group" or "private"
-        self._paused_groups: set[str] = set(self.cfg.paused_groups or [])  # 被管理员暂停的群
+        self._paused_groups: set[str] = set(self.cfg.paused_groups or [])  # 管理员 /pause 暂停的群（不落盘）
+        self._muted_groups: set[str] = set()  # 睡觉被吵醒自动免打扰的群（落盘但不 LLM）
         self._lock = asyncio.Lock()
         self._buffers: dict[tuple[str, str], dict] = {}
         self._last_combined: dict[str, str] = {}
@@ -285,8 +286,7 @@ class MessageHandler:
 
         group_keys = [k for k, t in self._convo_types.items() if t == "group"]
         for gid in group_keys:
-            self._paused_groups.add(gid)
-        self._save_paused_groups()
+            self._muted_groups.add(gid)
         self._set_proactive_pause("__all_groups__", until)
         logger.info(f"[{self.bot_qq}] All groups muted until {wake.strftime('%H:%M')}")
 
@@ -547,16 +547,19 @@ class MessageHandler:
         # 只有当前发送者是管理员时，才注入管理员描述（防止信息泄露）
         is_sender_admin = any(str(a.get("qq", "")) == user_id for a in self.cfg.admins)
 
-        # 群聊暂停/恢复：被暂停的群不调 LLM，但消息仍落盘
+        # 群聊暂停（手动 /pause）：不 LLM、不落盘，仅 /resume 可恢复
         if is_group and group_id in self._paused_groups:
-            # 消息落盘（不回复，但保留记录）
-            self._append_history(user_id, "user", text, group_id)
             logger.info(f"[{self.bot_qq}] Group {group_id} is paused, checking /resume: admin={is_sender_admin}, text={text[:80]}")
             if is_sender_admin and "/resume" in text:
                 self._paused_groups.discard(group_id)
                 self._save_paused_groups()
                 logger.info(f"[{self.bot_qq}] Group {group_id} resumed by admin {user_id}")
                 return [ReplyPart("啊呜～鱼回来啦！有什么好玩的事吗？")]
+            return []
+
+        # 群聊免打扰（睡觉自动开）：不 LLM，但消息落盘
+        if is_group and group_id in self._muted_groups:
+            self._append_history(user_id, "user", text, group_id)
             return []
 
         # /pause 命令：管理员暂停群聊（可能带回复/@前缀）
@@ -1147,8 +1150,7 @@ class MessageHandler:
             # 群聊免打扰（仅睡眠时段、当前群）
             mg = data.get("mute_groups")
             if mg is True and is_group and group_id and get_mood(self.bot_qq).sleep_state == "sleeping":
-                self._paused_groups.add(group_id)
-                self._save_paused_groups()
+                self._muted_groups.add(group_id)
                 logger.info(f"[{self.bot_qq}] Group {group_id} muted (sleep+angry)")
             # 收藏表情包
             save_s = data.get("save_sticker")

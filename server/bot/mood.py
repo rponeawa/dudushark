@@ -193,10 +193,7 @@ class DuduMood:
             from server.bot.message_handler import get_message_handler
             h = get_message_handler(self.bot_qq)
             h.unpause_proactive("__all_groups__")
-            # 清除所有暂停的群
-            for gid in list(h._paused_groups):
-                h._paused_groups.discard(gid)
-            h._save_paused_groups()
+            h._muted_groups.clear()
         except Exception:
             pass
 

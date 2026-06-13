@@ -10,7 +10,14 @@ export default function MuteGroupsPage({ activeQQ }: Props) {
   const load = async () => {
     if (!activeQQ) return;
     setLoading(true);
-    try { const d = await getPausedGroups(activeQQ); setMuted(d.paused_groups); } catch {}
+    const token = localStorage.getItem("dudushark_token") || "";
+    try {
+      const r = await fetch(`/api/instances/${activeQQ}/proactive_paused`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const d = await r.json();
+      setMuted(d.muted_groups || []);
+    } catch {}
     setLoading(false);
   };
   useEffect(() => { load(); }, [activeQQ]);
