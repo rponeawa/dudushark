@@ -9,7 +9,7 @@ from pathlib import Path
 EMOTIONS = ["开心", "生气", "难过", "撒娇", "平静"]
 
 TRANSITION_SPEED = 0.65   # 每次 tick 过渡进度，约 2 次完成
-DEFAULT_INTENSITY = 0.6   # 新情绪的默认强度
+DEFAULT_INTENSITY = 0.45  # 新情绪的默认强度（温和，不要动不动就满值）
 
 
 class DuduEmotion:
@@ -66,8 +66,9 @@ class DuduEmotion:
                 t = self._progress
                 self.intensity = self._from_intensity * (1 - t) + DEFAULT_INTENSITY * t
         else:
-            # Natural drift toward baseline
-            self.intensity += (0.3 - self.intensity) * 0.03
+            # Natural drift: faster for anger (不记仇), slower for others
+            rate = 0.06 if self.current == "生气" else 0.03
+            self.intensity += (0.3 - self.intensity) * rate
         self.intensity = max(0.05, min(1.0, self.intensity))
         self._save()
 
