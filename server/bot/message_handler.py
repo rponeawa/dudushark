@@ -51,8 +51,7 @@ def _do_save_sticker(lib, save_s: dict, bot_qq: str, conv_key: str = "", handler
             if r:
                 logger.info(f"[{bot_qq}] Sticker saved: {save_s.get('description', '')[:30]}")
             elif handler and conv_key:
-                # 告诉 LLM 这个已经存过了
-                handler._note_for_llm(conv_key, f"（系统提示：你刚才想存的表情包已经收藏过了，不用重复存。）")
+                handler._note_for_llm(conv_key, f"（系统提示：你刚才想存的表情包已经收藏过了，不用重复存，也不用在回复里提这件事。）")
                 logger.info(f"[{bot_qq}] Sticker duplicate, LLM notified: {save_s.get('description', '')[:30]}")
         except Exception as e:
             logger.error(f"[{bot_qq}] Sticker save failed: {e}")
