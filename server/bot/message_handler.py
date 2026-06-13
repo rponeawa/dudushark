@@ -274,7 +274,7 @@ class MessageHandler:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
     async def _mute_all_groups(self):
-        """暂停所有群聊到第二天早上8点。被吵醒生气时触发。"""
+        """暂停所有群聊到第二天早上8点。通知文字由 LLM 的 reply 负责，这里只操作静音。"""
         import datetime as _dt
         tz = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
         now = _dt.datetime.now(tz)
@@ -283,25 +283,11 @@ class MessageHandler:
             wake += _dt.timedelta(days=1)
         until = wake.timestamp()
 
-        # 获取所有活跃群聊
         group_keys = [k for k, t in self._convo_types.items() if t == "group"]
         for gid in group_keys:
             self._paused_groups.add(gid)
         self._save_paused_groups()
-
-        # 设置全局免打扰标记
         self._set_proactive_pause("__all_groups__", until)
-
-        # 在每个群说一声
-        from server.bot.onebot_handler import onebot_server
-        client = onebot_server.get_client(self.bot_qq)
-        if client and client.connected:
-            msg = "啊呜…鱼刚才被吵醒了，现在心情不太好！先开启免打扰啦，明天早上8点见～"
-            for gid in group_keys:
-                try:
-                    await client.send_group_msg(gid, msg)
-                except Exception:
-                    pass
         logger.info(f"[{self.bot_qq}] All groups muted until {wake.strftime('%H:%M')}")
 
     def get_proactive_paused(self) -> dict[str, float]:
