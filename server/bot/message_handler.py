@@ -1168,7 +1168,7 @@ class MessageHandler:
                 self._pause_proactive_for(user_id, pp.strip())
             # 群聊免打扰（仅睡眠时段、当前群）
             mg = data.get("mute_groups")
-            if mg is True and is_group and group_id and get_mood(self.bot_qq).sleep_state == "sleeping":
+            if mg is True and is_group and group_id and get_mood(self.bot_qq).sleep_state in ("sleeping", "sleepy"):
                 self._muted_groups.add(group_id)
                 self._save_muted_groups()
                 logger.info(f"[{self.bot_qq}] Group {group_id} muted (sleep+angry)")
