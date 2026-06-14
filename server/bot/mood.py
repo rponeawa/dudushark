@@ -60,18 +60,14 @@ class DuduMood:
 
     def llm_temperature(self, base: float = 0.85, emotion: str = "", emotion_intensity: float = 0.0) -> float:
         t = base
-        # 困/睡着 → 温度升高（更随性、可能暴躁）
+        # 仅困/睡着时温度升高（更随性、可能暴躁）
         if self.sleep_state == "sleeping":
             t += 0.2
+            if emotion == "生气":
+                t += emotion_intensity * 0.3
         elif self.sleep_state == "sleepy":
             t += 0.1
-        # 情绪影响
-        if emotion == "生气":
-            t += emotion_intensity * 0.3
-        elif emotion == "撒娇":
-            t += emotion_intensity * 0.1
-        elif emotion == "开心":
-            t += emotion_intensity * 0.05
+        # 清醒时温度不变，避免胡言乱语
         return min(1.5, t)
 
     def llm_max_tokens(self, base: int = 4096) -> int:
