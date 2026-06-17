@@ -1025,12 +1025,57 @@ class MessageHandler:
                     random_results.append(result_text)
                     logger.info(f"[{self.bot_qq}] LLM 请求随机: {rtype}×{count} → {result_text[:60]}")
             if random_results:
-                messages.append({"role": "user", "content": "（系统：随机结果——" + "；".join(random_results) + "）"})
+                # 生成一句自然的"正在抛/投"的话
+                rtype_names = {"coin": "抛硬币", "dice": "掷骰子", "number": "生成随机数", "choice": "随机选"}
+                rtype_label = rtype_names.get(random_results[0].split(":")[0] if ":" in str(random_results) else "coin", "随机")
+                say_msgs = [
+                    {"role": "system", "content": "你是嘟嘟鲨鱼，一只傲娇的赛博大鲨鱼。你要帮对方抛硬币/掷骰子/生成随机数。用一句简短自然的话告诉对方你正在做，不要用固定模板，自由发挥。只输出这一句话。"},
+                    {"role": "user", "content": f"对方说：{text[:200]}\n你要做：{rtype_label}"},
+                ]
                 try:
-                    response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
-                except Exception as e:
-                    logger.error(f"[{self.bot_qq}] Random followup LLM failed: {e}")
-                    return []
+                    say_msg = await _call_llm_msg(llm.base_url, llm.api_key, {"model": llm.model, "messages": say_msgs, "temperature": 0.9, "max_tokens": 600}, timeout=10)
+                    say_text = say_msg.get("content", "").strip()
+                except Exception:
+                    say_text = ""
+                say_parts = self._split_reply(say_text) if say_text else ["啊呜～鱼来试试～"]
+                for part in say_parts:
+                    self._append_history(user_id, "assistant", part, group_id)
+                # 后台：注入随机结果，再调 LLM 生成最终回复
+                async def _random_followup():
+                    messages.append({"role": "user", "content": "（系统：随机结果——" + "；".join(random_results) + "）"})
+                    fu_payload = {k: v for k, v in payload.items() if k not in ("tools", "tool_choice")}
+                    fu_payload["messages"] = messages
+                    try:
+                        fu_msg = await _call_llm_msg(llm.base_url, llm.api_key, fu_payload, timeout=45)
+                    except Exception:
+                        return
+                    fu_reply = fu_msg.get("content", "").strip()
+                    if not fu_reply:
+                        fu_reply = fu_msg.get("reasoning", "").strip()
+                    if fu_reply:
+                        final_data = _parse_json(fu_reply) or {"reply": fu_reply}
+                        reply_txt = final_data.get("reply", fu_reply)
+                        want_quote = final_data.get("quote", False)
+                        from server.bot.onebot_handler import onebot_server
+                        client = onebot_server.get_client(self.bot_qq)
+                        if client and client.connected:
+                            target = group_id if is_group else user_id
+                            for pi, part in enumerate(self._split_reply(reply_txt)):
+                                try:
+                                    if is_group:
+                                        await client.send_group_msg(target, part)
+                                    else:
+                                        await client.send_private_msg(user_id, part)
+                                    if pi < len(self._split_reply(reply_txt)) - 1:
+                                        await asyncio.sleep(max(2.0, len(part) * 0.08 + 1.0))
+                                except Exception:
+                                    pass
+                                self._append_history(user_id, "assistant", part, group_id)
+                asyncio.create_task(_random_followup())
+                result = []  # prepare empty result for say_parts
+                for part in say_parts:
+                    result.append(ReplyPart(part, None))
+                return result
 
         if tool_calls and self.cfg.web_search_enabled:
             search_queries = []
