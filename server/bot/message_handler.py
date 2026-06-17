@@ -1029,7 +1029,7 @@ class MessageHandler:
                 rtype_names = {"coin": "抛硬币", "dice": "掷骰子", "number": "生成随机数", "choice": "随机选"}
                 rtype_label = rtype_names.get(random_results[0].split(":")[0] if ":" in str(random_results) else "coin", "随机")
                 say_msgs = [
-                    {"role": "system", "content": "你是嘟嘟鲨鱼，一只傲娇的赛博大鲨鱼。你要帮对方抛硬币/掷骰子/生成随机数。用一句简短自然的话告诉对方你正在做，不要用固定模板，自由发挥。只输出这一句话。"},
+                    {"role": "system", "content": PERSONA_SYSTEM_PROMPT.replace("{admins_description}", admin_desc) + "\n\n你要帮对方抛硬币/掷骰子/生成随机数。用一句简短自然的话告诉对方你正在做，不要用固定模板，自由发挥。只输出这一句话。"},
                     {"role": "user", "content": f"对方说：{text[:200]}\n你要做：{rtype_label}"},
                 ]
                 try:
