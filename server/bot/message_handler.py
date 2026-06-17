@@ -38,6 +38,25 @@ def _sanitize_for_llm(text: str) -> str:
     return text
 
 
+def _do_random(rtype: str, count: int = 1, sides: int = 6, vmin: int = 1, vmax: int = 100, choices: list[str] | None = None) -> str:
+    """执行随机生成，返回结果文本。"""
+    import random as _random
+    results = []
+    for _ in range(count):
+        if rtype == "coin":
+            results.append(_random.choice(["正面", "反面"]))
+        elif rtype == "dice":
+            results.append(str(_random.randint(1, sides)))
+        elif rtype == "choice" and choices:
+            results.append(_random.choice(choices))
+        else:  # number
+            lo, hi = min(vmin, vmax), max(vmin, vmax)
+            results.append(str(_random.randint(lo, hi)))
+    if count == 1:
+        return results[0]
+    return ", ".join(results)
+
+
 from server.search.bing import bing_search, format_search_results
 
 logger = logging.getLogger("dudushark.message")
@@ -929,6 +948,24 @@ class MessageHandler:
                         "required": ["query"]
                     }
                 }
+            }, {
+                "type": "function",
+                "function": {
+                    "name": "random",
+                    "description": "生成随机数。用于抛硬币、掷骰子、随机选择等。只在有人明确要求抛硬币/掷骰子/随机数时才调用，不要自己乱用。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "description": "类型：coin=抛硬币, dice=掷骰子(默认d6), number=随机数, choice=从列表中随机选", "enum": ["coin", "dice", "number", "choice"]},
+                            "count": {"type": "integer", "description": "生成个数，默认1"},
+                            "sides": {"type": "integer", "description": "骰子面数，默认6"},
+                            "min": {"type": "integer", "description": "随机数范围最小值，默认1"},
+                            "max": {"type": "integer", "description": "随机数范围最大值，默认100"},
+                            "choices": {"type": "array", "items": {"type": "string"}, "description": "用于choice类型，候选列表"},
+                        },
+                        "required": ["type"]
+                    }
+                }
             }],
             "tool_choice": "auto",
         }
@@ -969,8 +1006,32 @@ class MessageHandler:
                 logger.error(f"LLM 调用最终失败: {e}")
                 return []
 
-        # 函数调用循环：LLM 请求搜索 → 先说一句话 → 后台搜索+LLM+发结果
+        # 函数调用：random 工具 → 直接生成结果注入上下文，再调一次 LLM
         tool_calls = response_msg.get("tool_calls", [])
+        if tool_calls:
+            random_results = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                if fn.get("name") == "random":
+                    try:
+                        args = json.loads(fn.get("arguments", "{}"))
+                    except (json.JSONDecodeError, TypeError):
+                        args = {}
+                    rtype = args.get("type", "coin")
+                    count = max(1, min(20, int(args.get("count", 1) or 1)))
+                    result_text = _do_random(rtype=rtype, count=count, sides=int(args.get("sides", 6) or 6),
+                        vmin=int(args.get("min", 1) or 1), vmax=int(args.get("max", 100) or 100),
+                        choices=args.get("choices"))
+                    random_results.append(result_text)
+                    logger.info(f"[{self.bot_qq}] LLM 请求随机: {rtype}×{count} → {result_text[:60]}")
+            if random_results:
+                messages.append({"role": "user", "content": "（系统：随机结果——" + "；".join(random_results) + "）"})
+                try:
+                    response_msg = await _call_llm_msg(llm.base_url, llm.api_key, payload)
+                except Exception as e:
+                    logger.error(f"[{self.bot_qq}] Random followup LLM failed: {e}")
+                    return []
+
         if tool_calls and self.cfg.web_search_enabled:
             search_queries = []
             for tc in tool_calls:
