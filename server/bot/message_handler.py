@@ -707,10 +707,11 @@ class MessageHandler:
             )
         messages.append({"role": "system", "content": json_prompt})
 
-        # 时间单独一个消息，避免 json_prompt 因时间变化而整体 cache miss
+        # 时间单独一个消息，放在 persona + json_prompt 之后，避免破坏缓存命中
         now_utc = datetime.now(timezone.utc)
         tz8 = timezone(__import__("datetime").timedelta(hours=8))
-        cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %H:%M")
+        cn_str = now_utc.astimezone(tz8).strftime("%Y-%m-%d %a %H:%M")
+        cn_str = cn_str.replace("Mon","周一").replace("Tue","周二").replace("Wed","周三").replace("Thu","周四").replace("Fri","周五").replace("Sat","周六").replace("Sun","周日")
         messages.append({"role": "system", "content": f"当前北京时间: {cn_str}"})
 
         # 动态上下文
